@@ -44,4 +44,10 @@ extend-ignore = ["B008"]
 python_version = "3.9"
 strict = true
 warn_return_any = true
-warn_unused_configs = true 
+warn_unused_configs = true
+
+[tool.ruff.lint.isort]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+known-first-party = ["news_assistant"]
+force-single-line = false
+case-sensitive = false 
