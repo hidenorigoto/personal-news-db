@@ -7,7 +7,7 @@ readme = "README.md"
 packages = [{ include = "news_assistant" }]
 
 [tool.poetry.dependencies]
-python = ">=3.9,<4.0"
+python = ">=3.12,<4.0"
 fastapi = "^0.115.12"
 uvicorn = "^0.24.0"
 sqlalchemy = "^2.0.23"
@@ -32,12 +32,13 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.black]
 line-length = 100
-target-version = ['py39']
+target-version = ['py312']
 
 [tool.ruff]
 line-length = 100
-target-version = "py39"
+target-version = "py312"
 select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM", "TCH"]
+extend-ignore = ["B008"]
 
 [tool.mypy]
 python_version = "3.9"

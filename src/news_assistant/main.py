@@ -65,10 +65,8 @@ def extract_title_from_pdf(content: bytes) -> str:
 
 
 @app.post("/api/articles/", response_model=schemas.Article)
-def create_article(article: schemas.ArticleCreate, db: Session = None) -> models.Article:
+def create_article(article: schemas.ArticleCreate, db: Session = Depends(get_db)):
     """記事を新規登録するAPIエンドポイント。"""
-    if db is None:
-        db = Depends(get_db)()
     # URLのコンテンツ取得
     try:
         resp = requests.get(article.url, timeout=10)
@@ -119,20 +117,16 @@ def create_article(article: schemas.ArticleCreate, db: Session = None) -> models
 
 @app.get("/api/articles/", response_model=schemas.ArticleList)
 def read_articles(
-    skip: int = 0, limit: int = 100, db: Session = None
-) -> dict[str, list[models.Article]]:
+    skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
+):
     """記事一覧を取得するAPIエンドポイント。"""
-    if db is None:
-        db = Depends(get_db)()
     articles = db.query(models.Article).offset(skip).limit(limit).all()
     return {"articles": articles}
 
 
 @app.get("/api/articles/{article_id}", response_model=schemas.Article)
-def read_article(article_id: int, db: Session = None) -> models.Article:
+def read_article(article_id: int, db: Session = Depends(get_db)):
     """個別記事を取得するAPIエンドポイント。"""
-    if db is None:
-        db = Depends(get_db)()
     article = db.query(models.Article).filter(models.Article.id == article_id).first()
     if article is None:
         raise HTTPException(status_code=404, detail="Article not found")
