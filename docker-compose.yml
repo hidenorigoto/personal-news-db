@@ -1,0 +1,56 @@
+services:
+  app:
+    build: .
+    container_name: news-assistant-prod
+    ports:
+      - "8000:8000"
+    volumes:
+      - data:/app/data
+    environment:
+      - NEWS_ASSISTANT_DB_URL=sqlite:///./data/news.db
+    restart: unless-stopped
+
+  app-dev:
+    build: .
+    container_name: news-assistant-dev
+    command: uvicorn news_assistant.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src/news_assistant:/app/news_assistant
+      - ./data:/app/data
+      - ./pyproject.toml:/app/pyproject.toml
+      - ./poetry.lock:/app/poetry.lock
+    environment:
+      - NEWS_ASSISTANT_DB_URL=sqlite:///./data/news.db
+      - PYTHONPATH=/app
+    restart: unless-stopped
+
+  test:
+    build: .
+    command: sh -c "PYTHONPATH=/app pytest"
+    volumes:
+      - ./src/news_assistant:/app/news_assistant
+      - ./tests:/app/tests
+      - ./data:/app/data
+      - ./pyproject.toml:/app/pyproject.toml
+      - ./poetry.lock:/app/poetry.lock
+    environment:
+      - NEWS_ASSISTANT_DB_URL=sqlite:///./data/news.db
+
+  poetry:
+    build: .
+    container_name: news-assistant-poetry
+    command: poetry shell
+    tty: true
+    stdin_open: true
+    volumes:
+      - ./src/news_assistant:/app/news_assistant
+      - ./tests:/app/tests
+      - ./data:/app/data
+      - ./pyproject.toml:/app/pyproject.toml
+      - ./poetry.lock:/app/poetry.lock
+    environment:
+      - NEWS_ASSISTANT_DB_URL=sqlite:///./data/news.db
+volumes:
+  data: 
