@@ -31,11 +31,11 @@ requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.black]
-line-length = 88
+line-length = 100
 target-version = ['py39']
 
 [tool.ruff]
-line-length = 88
+line-length = 100
 target-version = "py39"
 select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM", "TCH"]
 
