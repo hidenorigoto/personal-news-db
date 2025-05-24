@@ -9,6 +9,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy.orm import Session
 
 from . import models, schemas
+from . import summary as summary_module
 from .database import engine, get_db
 
 models.Base.metadata.create_all(bind=engine)
@@ -64,6 +65,33 @@ def extract_title_from_pdf(content: bytes) -> str:
     return ""
 
 
+def extract_text_from_html(content: bytes) -> str:
+    soup = BeautifulSoup(content, "html.parser")
+    # <body>タグ優先、なければ全テキスト
+    body = soup.find("body")
+    if body:
+        text = body.get_text(separator="\n", strip=True)
+    else:
+        text = soup.get_text(separator="\n", strip=True)
+    return text
+
+
+def extract_text_from_pdf(content: bytes) -> str:
+    try:
+        with io.BytesIO(content) as pdf_io:
+            reader = pypdf.PdfReader(pdf_io)
+            return "\n".join(page.extract_text() or "" for page in reader.pages)
+    except Exception:
+        return ""
+
+
+def extract_text_from_txt(content: bytes) -> str:
+    try:
+        return content.decode("utf-8", errors="ignore")
+    except Exception:
+        return ""
+
+
 @app.post("/api/articles/", response_model=schemas.Article)
 def create_article(article: schemas.ArticleCreate, db: Session = Depends(get_db)) -> models.Article:
     """記事を新規登録するAPIエンドポイント。"""
@@ -76,7 +104,8 @@ def create_article(article: schemas.ArticleCreate, db: Session = Depends(get_db)
         ct = content_type
         url = article.url
         ext = get_extension_from_content_type(
-            ct, url
+            ct,
+            url
         )
     except Exception as e:
         raise HTTPException(
@@ -93,7 +122,25 @@ def create_article(article: schemas.ArticleCreate, db: Session = Depends(get_db)
     # title優先順位: 自動抽出 > リクエストボディ
     final_title = auto_title if auto_title else article.title
 
-    db_article = models.Article(url=article.url, title=final_title)
+    # 本文抽出
+    extracted_text = ""
+    if ext == "html":
+        extracted_text = extract_text_from_html(content)
+    elif ext == "pdf":
+        extracted_text = extract_text_from_pdf(content)
+    elif ext == "txt":
+        extracted_text = extract_text_from_txt(content)
+    # それ以外は空文字
+
+    # 要約生成
+    summary = ""
+    if extracted_text.strip():
+        try:
+            summary = summary_module.generate_summary(extracted_text)
+        except Exception:
+            summary = ""
+
+    db_article = models.Article(url=article.url, title=final_title, summary=summary)
     db.add(db_article)
     try:
         db.commit()

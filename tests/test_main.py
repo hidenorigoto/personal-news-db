@@ -52,6 +52,11 @@ def test_create_article(monkeypatch: Any) -> None:
             pass
     monkeypatch.setattr("requests.get", lambda url, timeout=10: MockResponse())
 
+    # openai要約APIをモック
+    def mock_summary(content: str) -> str:
+        return "これは要約です。"
+    monkeypatch.setattr("news_assistant.summary.generate_summary", mock_summary)
+
     data = {"url": "http://example.com/unique-test-1", "title": "Example"}
     try:
         response = client.post("/api/articles/", json=data)
@@ -61,6 +66,9 @@ def test_create_article(monkeypatch: Any) -> None:
         result = response.json()
         assert result["url"] == data["url"]
         assert result["title"] == data["title"]
+        assert isinstance(result["summary"], str)
+        expected_summary = "これは要約です。"
+        assert result["summary"] == expected_summary
         # ファイルが保存されているか確認
         files = os.listdir(TEST_DATA_DIR)
         assert any(f.endswith(".html") for f in files)

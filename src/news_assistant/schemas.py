@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict
 class ArticleBase(BaseModel):
     url: str
     title: str
+    summary: str | None = None
 
 
 class ArticleCreate(ArticleBase):
