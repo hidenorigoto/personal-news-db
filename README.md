@@ -120,3 +120,16 @@ docker compose run --rm poetry poetry run pytest
 ### 注意
 - テストは毎回クリーンなDB・dataディレクトリで実行されます。
 - テスト用のURLはユニークになるよう自動生成されています。
+
+## 開発用Tips
+
+### DockerでDBの中身を直接確認する
+
+記事が正しくDBに保存されているかを直接確認したい場合、Poetry環境のPythonワンライナーでDBを参照できます。
+
+```bash
+docker compose run --rm poetry poetry run python -c "import sqlite3; import json; conn = sqlite3.connect('./data/news.db'); c = conn.cursor(); c.execute('SELECT id, url, title, created_at FROM articles ORDER BY id DESC LIMIT 5'); rows = c.fetchall(); print(json.dumps(rows, ensure_ascii=False, indent=2)); conn.close()"
+```
+
+- 直近5件の登録記事（id, url, title, created_at）がJSON形式で表示されます。
+- DBファイルのパスやテーブル名は必要に応じて調整してください。

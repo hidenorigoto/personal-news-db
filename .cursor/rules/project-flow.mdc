@@ -3,6 +3,8 @@ description:
 globs: 
 alwaysApply: true
 ---
+# コマンドはすべてDockerベースでの実行とする
+
 ## 確認なしで実行してよいコマンド
 - poetryコマンドは確認なしで実行してよい
 - pytestコマンドは確認なしで実行してよい
