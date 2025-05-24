@@ -35,7 +35,10 @@ def generate_summary(content: str, model: str = "gpt-3.5-turbo", max_tokens: int
             max_tokens=max_tokens,
             temperature=0.3,
         )
-        summary = response.choices[0].message.content.strip()
+        content_ = response.choices[0].message.content
+        if content_ is None:
+            raise SummaryGenerationError("OpenAI APIのレスポンスにcontentが含まれていません")
+        summary = content_.strip()
         return summary
     except Exception as e:
         raise SummaryGenerationError(f"OpenAI API要約生成失敗: {e}") from e
