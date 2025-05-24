@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+    branches:
+      - '**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.9, 3.10, 3.11]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install Poetry
+        run: |
+          pip install poetry
+      - name: Install dependencies
+        run: |
+          poetry install --no-interaction --no-root
+      - name: Run lint (ruff)
+        run: |
+          poetry run ruff check src tests
+      - name: Run type check (mypy)
+        run: |
+          poetry run mypy src tests
+      - name: Run tests
+        run: |
+          poetry run pytest --cov=src --cov-report=term-missing 
