@@ -8,6 +8,8 @@ services:
       - data:/app/data
     environment:
       - NEWS_ASSISTANT_DB_URL=sqlite:///./data/news.db
+      - PYTHONPATH=/app
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
     restart: unless-stopped
 
   app-dev:
@@ -24,6 +26,7 @@ services:
     environment:
       - NEWS_ASSISTANT_DB_URL=sqlite:///./data/news.db
       - PYTHONPATH=/app
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
     restart: unless-stopped
 
   test:

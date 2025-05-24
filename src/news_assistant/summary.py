@@ -26,16 +26,16 @@ def generate_summary(content: str, model: str = "gpt-3.5-turbo", max_tokens: int
     """
     if not OPENAI_API_KEY:
         raise SummaryGenerationError("OPENAI_API_KEYが設定されていません")
-    openai.api_key = OPENAI_API_KEY
+    client = openai.OpenAI(api_key=OPENAI_API_KEY)
     prompt = PROMPT_TEMPLATE.format(content=content)
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt}],
             max_tokens=max_tokens,
             temperature=0.3,
         )
-        summary = response["choices"][0]["message"]["content"].strip()
+        summary = response.choices[0].message.content.strip()
         return summary
     except Exception as e:
         raise SummaryGenerationError(f"OpenAI API要約生成失敗: {e}") from e

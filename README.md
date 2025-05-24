@@ -135,3 +135,27 @@ docker compose run --rm poetry poetry run python -c "import sqlite3; import json
 
 - 直近5件の登録記事（id, url, title, created_at）がJSON形式で表示されます。
 - DBファイルのパスやテーブル名は必要に応じて調整してください。
+
+## DBのクリア方法（記事データのリセット）
+
+開発・検証時に記事データ（`articles`テーブル）をクリアしたい場合は、以下のコマンドを実行してください。
+
+### 1. テーブルのデータのみ削除（DBファイルは残す）
+
+```bash
+docker compose run --rm poetry poetry run python -c "import sqlite3; conn = sqlite3.connect('./data/news.db'); c = conn.cursor(); c.execute('DELETE FROM articles'); conn.commit(); conn.close()"
+```
+- すべての記事データが削除されますが、テーブル構造や他のデータは残ります。
+- DBファイル（`data/news.db`）自体は削除されません。
+
+### 2. DBファイルごと完全に削除（初期化）
+
+```bash
+rm -f data/news.db
+```
+または
+```bash
+docker compose run --rm poetry rm -f ./data/news.db
+```
+- DBファイル自体を削除します。次回サーバー起動時に新規作成されます。
+- **本番環境では実行しないでください。**

@@ -1,4 +1,5 @@
 import io
+import logging
 import os
 from urllib.parse import urlparse
 
@@ -140,7 +141,8 @@ def create_article(article: schemas.ArticleCreate, db: Session = Depends(get_db)
     if extracted_text.strip():
         try:
             summary = summary_module.generate_summary(extracted_text)
-        except Exception:
+        except Exception as e:
+            logging.error(f"要約生成失敗: {e}", exc_info=True)
             summary = ""
 
     db_article = models.Article(url=article.url, title=final_title, summary=summary)
