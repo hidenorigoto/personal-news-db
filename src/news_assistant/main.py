@@ -5,12 +5,15 @@ from urllib.parse import urlparse
 import pypdf
 import requests
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException
 from sqlalchemy.orm import Session
 
 from . import models, schemas
 from . import summary as summary_module
 from .database import engine, get_db
+
+load_dotenv()
 
 models.Base.metadata.create_all(bind=engine)
 
