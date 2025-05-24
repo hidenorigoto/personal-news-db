@@ -34,4 +34,4 @@ jobs:
           poetry run mypy src tests
       - name: Run tests
         run: |
-          poetry run pytest --cov=src --cov-report=term-missing 
+          PYTHONPATH=src poetry run pytest --cov=src --cov-report=term-missing 
