@@ -65,7 +65,7 @@ def extract_title_from_pdf(content: bytes) -> str:
 
 
 @app.post("/api/articles/", response_model=schemas.Article)
-def create_article(article: schemas.ArticleCreate, db: Session = Depends(get_db)):
+def create_article(article: schemas.ArticleCreate, db: Session = Depends(get_db)) -> models.Article:
     """記事を新規登録するAPIエンドポイント。"""
     # URLのコンテンツ取得
     try:
@@ -118,14 +118,14 @@ def create_article(article: schemas.ArticleCreate, db: Session = Depends(get_db)
 @app.get("/api/articles/", response_model=schemas.ArticleList)
 def read_articles(
     skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
-):
+) -> dict[str, list[models.Article]]:
     """記事一覧を取得するAPIエンドポイント。"""
     articles = db.query(models.Article).offset(skip).limit(limit).all()
     return {"articles": articles}
 
 
 @app.get("/api/articles/{article_id}", response_model=schemas.Article)
-def read_article(article_id: int, db: Session = Depends(get_db)):
+def read_article(article_id: int, db: Session = Depends(get_db)) -> models.Article:
     """個別記事を取得するAPIエンドポイント。"""
     article = db.query(models.Article).filter(models.Article.id == article_id).first()
     if article is None:

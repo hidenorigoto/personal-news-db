@@ -25,6 +25,7 @@ pytest = "^7.4.0"
 pytest-cov = "^4.1.0"
 pre-commit = "^3.5.0"
 httpx = "^0.27.0"
+types-requests = "^2.32.0.20250515"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
@@ -41,7 +42,7 @@ select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM", "TCH"]
 extend-ignore = ["B008"]
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.12"
 strict = true
 warn_return_any = true
 warn_unused_configs = true

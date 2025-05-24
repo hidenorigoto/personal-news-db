@@ -52,6 +52,17 @@ docker compose down
 - 型チェック: `poetry run mypy .`
 - テスト: `poetry run pytest`
 
+### 型チェック・mypy利用時の注意点
+
+- **型スタブ（types-xxx）が必要な場合は、必ず `poetry add --group dev types-xxx` で追加してください。**
+- **`mypy`で「Library stubs not installed for ...」と出た場合は、`poetry run mypy --install-types --non-interactive ...` で自動インストールできます。**
+- **DockerやCI環境では、`news_assistant` ディレクトリのみで型チェックを実行してください。**
+  - 例: `docker compose run --rm poetry poetry run mypy news_assistant`
+  - `src/news_assistant`や`tests`などのパス指定は、コンテナ内の作業ディレクトリ構成に依存します。
+- **型スタブや依存関係を追加・更新した場合は、Dockerイメージを再ビルドしてください。**
+  - 例: `docker compose build --no-cache`
+- **CIで型チェックが失敗する場合は、パス指定やキャッシュの有無を再確認してください。**
+
 ## API仕様
 
 APIの詳細な仕様は、サーバー起動後に以下のURLで確認できます：
