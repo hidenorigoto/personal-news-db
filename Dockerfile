@@ -13,7 +13,7 @@ COPY pyproject.toml poetry.lock ./
 
 # 依存インストール
 RUN poetry config virtualenvs.create false \
-    && poetry install --no-interaction --no-ansi
+    && poetry install --no-interaction --no-ansi --with dev
 
 # アプリケーションコピー
 COPY src/news_assistant ./news_assistant

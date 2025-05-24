@@ -1,8 +1,8 @@
 import os
 import shutil
+import uuid
 from collections.abc import Generator
 from typing import Any
-import uuid
 
 import pytest
 from fastapi.testclient import TestClient

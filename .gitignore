@@ -92,3 +92,4 @@ bandit.json
 
 # Local data
 /data/ 
+news.db 
