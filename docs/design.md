@@ -28,13 +28,14 @@ MVPとして、基本的な記事の登録と取得機能を実装します。
 
 #### articles テーブル
 
-| カラム名 | 型 | 説明 |
-|---------|-----|------|
-| id | INTEGER | 主キー、自動採番 |
-| url | TEXT | 記事のURL（ユニーク） |
-| title | TEXT | 記事のタイトル |
-| created_at | TIMESTAMP | 登録日時 |
-| updated_at | TIMESTAMP | 更新日時 |
+| カラム名    | 型        | 説明                         |
+|------------|-----------|------------------------------|
+| id         | INTEGER   | 主キー、自動採番             |
+| url        | TEXT      | 記事のURL（ユニーク）        |
+| title      | TEXT      | 記事のタイトル               |
+| summary    | TEXT      | 記事の要約（1000文字程度、自動生成） |
+| created_at | TIMESTAMP | 登録日時                     |
+| updated_at | TIMESTAMP | 更新日時                     |
 
 ## 4. API設計
 
@@ -55,6 +56,7 @@ MVPとして、基本的な記事の登録と取得機能を実装します。
     "id": "integer",
     "url": "string",
     "title": "string",
+    "summary": "string",
     "created_at": "string",
     "updated_at": "string"
   }
@@ -67,6 +69,7 @@ MVPとして、基本的な記事の登録と取得機能を実装します。
     - 例: `20240608_1.html`、`20240608_2.pdf`
     - 拡張子はContent-TypeヘッダーやURLから判定（html, pdf, txt等）。
   - `data` ディレクトリが存在しない場合は自動作成する。
+  - **記事本文からテキストを抽出し、OpenAI API（例: GPT-3.5/4）で1000文字程度の要約を自動生成し、summaryカラムに保存する。**
 
 #### 記事一覧の取得
 - エンドポイント: `GET /api/articles`
@@ -78,6 +81,7 @@ MVPとして、基本的な記事の登録と取得機能を実装します。
         "id": "integer",
         "url": "string",
         "title": "string",
+        "summary": "string",
         "created_at": "string",
         "updated_at": "string"
       }
@@ -93,6 +97,7 @@ MVPとして、基本的な記事の登録と取得機能を実装します。
     "id": "integer",
     "url": "string",
     "title": "string",
+    "summary": "string",
     "created_at": "string",
     "updated_at": "string"
   }

@@ -73,6 +73,8 @@ APIの詳細な仕様は、サーバー起動後に以下のURLで確認でき�
 
 詳細な設計ドキュメントは `docs/design.md` を参照してください。
 
+記事要約自動生成機能の詳細な設計は [`docs/summary_generation_design.md`](docs/summary_generation_design.md) を参照してください。
+
 ## サーバー再起動時の注意
 
 FastAPIサーバーを再起動する際、以下のエラーが発生する場合があります：
