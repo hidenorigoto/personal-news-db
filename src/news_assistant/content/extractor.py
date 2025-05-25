@@ -24,22 +24,21 @@ class ContentExtractor:
             response.raise_for_status()
 
             content_type = response.headers.get("Content-Type", "")
-            extension = ContentExtractor._get_extension_from_content_type(
-                content_type, url
-            )
+            extension = ContentExtractor._get_extension_from_content_type(content_type, url)
 
             from pydantic import HttpUrl
+
             return ContentData(
                 url=HttpUrl(url),
                 content=response.content,
                 content_type=content_type,
-                extension=extension
+                extension=extension,
             )
         except Exception as e:
             raise ContentProcessingError(
                 f"Failed to fetch content from {url}: {e}",
                 error_code="FETCH_FAILED",
-                details={"url": url}
+                details={"url": url},
             ) from e
 
     @staticmethod
@@ -82,16 +81,12 @@ class ContentExtractor:
                 return ContentExtractor._extract_title_from_pdf(content_data.content)
             else:
                 return TitleExtractionResult(
-                    title=fallback_title,
-                    success=bool(fallback_title),
-                    method="fallback"
+                    title=fallback_title, success=bool(fallback_title), method="fallback"
                 )
         except Exception as e:
             logger.warning(f"Title extraction failed: {e}")
             return TitleExtractionResult(
-                title=fallback_title,
-                success=bool(fallback_title),
-                method="fallback_error"
+                title=fallback_title, success=bool(fallback_title), method="fallback_error"
             )
 
     @staticmethod
@@ -102,19 +97,11 @@ class ContentExtractor:
             title_tag = soup.find("title")
             if title_tag and title_tag.text:
                 title = title_tag.text.strip()
-                return TitleExtractionResult(
-                    title=title,
-                    success=True,
-                    method="html_tag"
-                )
+                return TitleExtractionResult(title=title, success=True, method="html_tag")
         except Exception as e:
             logger.warning(f"HTML title extraction failed: {e}")
 
-        return TitleExtractionResult(
-            title="",
-            success=False,
-            method="html_tag_failed"
-        )
+        return TitleExtractionResult(title="", success=False, method="html_tag_failed")
 
     @staticmethod
     def _extract_title_from_pdf(content: bytes) -> TitleExtractionResult:
@@ -124,19 +111,11 @@ class ContentExtractor:
                 reader = pypdf.PdfReader(pdf_io)
                 if reader.metadata and reader.metadata.title:
                     title = str(reader.metadata.title).strip()
-                    return TitleExtractionResult(
-                        title=title,
-                        success=True,
-                        method="pdf_metadata"
-                    )
+                    return TitleExtractionResult(title=title, success=True, method="pdf_metadata")
         except Exception as e:
             logger.warning(f"PDF title extraction failed: {e}")
 
-        return TitleExtractionResult(
-            title="",
-            success=False,
-            method="pdf_metadata_failed"
-        )
+        return TitleExtractionResult(title="", success=False, method="pdf_metadata_failed")
 
     @staticmethod
     def extract_text(content_data: ContentData) -> TextExtractionResult:
@@ -149,18 +128,10 @@ class ContentExtractor:
             elif content_data.extension == "txt":
                 return ContentExtractor._extract_text_from_txt(content_data.content)
             else:
-                return TextExtractionResult(
-                    text="",
-                    success=False,
-                    word_count=0
-                )
+                return TextExtractionResult(text="", success=False, word_count=0)
         except Exception as e:
             logger.warning(f"Text extraction failed: {e}")
-            return TextExtractionResult(
-                text="",
-                success=False,
-                word_count=0
-            )
+            return TextExtractionResult(text="", success=False, word_count=0)
 
     @staticmethod
     def _extract_text_from_html(content: bytes) -> TextExtractionResult:
@@ -174,18 +145,10 @@ class ContentExtractor:
             else:
                 text = soup.get_text(separator="\n", strip=True)
 
-            return TextExtractionResult(
-                text=text,
-                success=True,
-                word_count=len(text)
-            )
+            return TextExtractionResult(text=text, success=True, word_count=len(text))
         except Exception as e:
             logger.warning(f"HTML text extraction failed: {e}")
-            return TextExtractionResult(
-                text="",
-                success=False,
-                word_count=0
-            )
+            return TextExtractionResult(text="", success=False, word_count=0)
 
     @staticmethod
     def _extract_text_from_pdf(content: bytes) -> TextExtractionResult:
@@ -198,18 +161,10 @@ class ContentExtractor:
                     text_parts.append(page.extract_text())
                 text = "\n".join(text_parts)
 
-                return TextExtractionResult(
-                    text=text,
-                    success=True,
-                    word_count=len(text)
-                )
+                return TextExtractionResult(text=text, success=True, word_count=len(text))
         except Exception as e:
             logger.warning(f"PDF text extraction failed: {e}")
-            return TextExtractionResult(
-                text="",
-                success=False,
-                word_count=0
-            )
+            return TextExtractionResult(text="", success=False, word_count=0)
 
     @staticmethod
     def _extract_text_from_txt(content: bytes) -> TextExtractionResult:
@@ -221,15 +176,7 @@ class ContentExtractor:
             except UnicodeDecodeError:
                 text = content.decode("latin-1")
 
-            return TextExtractionResult(
-                text=text,
-                success=True,
-                word_count=len(text)
-            )
+            return TextExtractionResult(text=text, success=True, word_count=len(text))
         except Exception as e:
             logger.warning(f"Text file extraction failed: {e}")
-            return TextExtractionResult(
-                text="",
-                success=False,
-                word_count=0
-            )
+            return TextExtractionResult(text="", success=False, word_count=0)

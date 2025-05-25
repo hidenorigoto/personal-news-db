@@ -7,6 +7,7 @@ from ..core import Base
 
 class Article(Base):  # type: ignore[misc]
     """記事モデル"""
+
     __tablename__ = "articles"
 
     id = Column(Integer, primary_key=True, index=True)

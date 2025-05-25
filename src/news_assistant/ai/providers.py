@@ -50,23 +50,17 @@ class OpenAIProvider(AIProvider):
     def __init__(self, config: AIConfig):
         super().__init__(config)
         self.client = openai.OpenAI(
-            api_key=config.api_key,
-            base_url=config.base_url,
-            timeout=config.timeout
+            api_key=config.api_key, base_url=config.base_url, timeout=config.timeout
         )
 
     def _validate_config(self) -> None:
         """OpenAI設定の検証"""
         if not self.config.api_key:
-            raise AIConfigurationError(
-                "OpenAI API key is required",
-                error_code="MISSING_API_KEY"
-            )
+            raise AIConfigurationError("OpenAI API key is required", error_code="MISSING_API_KEY")
 
         if self.config.provider != AIProviderType.OPENAI:
             raise AIConfigurationError(
-                f"Invalid provider type: {self.config.provider}",
-                error_code="INVALID_PROVIDER"
+                f"Invalid provider type: {self.config.provider}", error_code="INVALID_PROVIDER"
             )
 
     def generate_summary(self, request: SummaryRequest) -> SummaryResponse:
@@ -89,8 +83,7 @@ class OpenAIProvider(AIProvider):
             content = response.choices[0].message.content
             if content is None:
                 raise SummaryGenerationError(
-                    "OpenAI API returned empty content",
-                    error_code="EMPTY_RESPONSE"
+                    "OpenAI API returned empty content", error_code="EMPTY_RESPONSE"
                 )
 
             summary = content.strip()
@@ -112,28 +105,22 @@ class OpenAIProvider(AIProvider):
                 provider=self.config.provider,
                 model_name=self.config.model_name,
                 processing_time=processing_time,
-                metadata=metadata
+                metadata=metadata,
             )
 
         except openai.RateLimitError as e:
             raise AIRateLimitError(
-                f"OpenAI rate limit exceeded: {e}",
-                error_code="RATE_LIMIT_EXCEEDED"
+                f"OpenAI rate limit exceeded: {e}", error_code="RATE_LIMIT_EXCEEDED"
             ) from e
         except openai.APIError as e:
             if "quota" in str(e).lower():
                 raise AIQuotaExceededError(
-                    f"OpenAI quota exceeded: {e}",
-                    error_code="QUOTA_EXCEEDED"
+                    f"OpenAI quota exceeded: {e}", error_code="QUOTA_EXCEEDED"
                 ) from e
-            raise AIProviderError(
-                f"OpenAI API error: {e}",
-                error_code="API_ERROR"
-            ) from e
+            raise AIProviderError(f"OpenAI API error: {e}", error_code="API_ERROR") from e
         except Exception as e:
             raise SummaryGenerationError(
-                f"Summary generation failed: {e}",
-                error_code="GENERATION_FAILED"
+                f"Summary generation failed: {e}", error_code="GENERATION_FAILED"
             ) from e
 
     def _build_prompt(self, request: SummaryRequest) -> str:
@@ -144,30 +131,23 @@ class OpenAIProvider(AIProvider):
         # デフォルトプロンプトテンプレート
         templates = {
             "concise": (
-                "以下のニュース記事を{max_length}文字程度で簡潔に要約してください。"
-                "重要なポイントのみを含めてください。\n\n記事:\n{content}"
+                "以下のニュース記事を{max_length}文字程度で簡潔に要約してください。" "重要なポイントのみを含めてください。\n\n記事:\n{content}"
             ),
             "detailed": (
                 "以下のニュース記事を{max_length}文字程度で詳細に要約してください。"
                 "背景情報や詳細も含めて包括的にまとめてください。\n\n記事:\n{content}"
             ),
-            "bullet_points": (
-                "以下のニュース記事の要点を箇条書きで{max_length}文字程度に"
-                "まとめてください。\n\n記事:\n{content}"
-            ),
+            "bullet_points": ("以下のニュース記事の要点を箇条書きで{max_length}文字程度に" "まとめてください。\n\n記事:\n{content}"),
             "executive": (
                 "以下のニュース記事をエグゼクティブサマリー形式で{max_length}文字程度に"
                 "まとめてください。意思決定に必要な情報を中心に記載してください。\n\n記事:\n{content}"
-            )
+            ),
         }
 
         template = templates.get(request.style.value, templates["concise"])
         max_length = request.max_length or 1000
 
-        return template.format(
-            content=request.content,
-            max_length=max_length
-        )
+        return template.format(content=request.content, max_length=max_length)
 
     def test_connection(self) -> bool:
         """OpenAI API接続テスト"""
@@ -176,7 +156,7 @@ class OpenAIProvider(AIProvider):
             response = self.client.chat.completions.create(
                 model=self.config.model_name,
                 messages=[{"role": "user", "content": "Hello"}],
-                max_tokens=5
+                max_tokens=5,
             )
             return response.choices[0].message.content is not None
         except Exception as e:
@@ -204,7 +184,7 @@ class MockAIProvider(AIProvider):
             provider=AIProviderType.LOCAL,
             model_name="mock-model",
             processing_time=processing_time,
-            metadata={"mock": True}
+            metadata={"mock": True},
         )
 
     def test_connection(self) -> bool:

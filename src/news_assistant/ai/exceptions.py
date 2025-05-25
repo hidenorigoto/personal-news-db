@@ -5,29 +5,35 @@ from ..core.exceptions import NewsAssistantError
 
 class AIServiceError(NewsAssistantError):
     """AI サービス基底例外"""
+
     pass
 
 
 class SummaryGenerationError(AIServiceError):
     """要約生成エラー"""
+
     pass
 
 
 class AIProviderError(AIServiceError):
     """AI プロバイダーエラー"""
+
     pass
 
 
 class AIConfigurationError(AIServiceError):
     """AI 設定エラー"""
+
     pass
 
 
 class AIQuotaExceededError(AIServiceError):
     """AI API クォータ超過エラー"""
+
     pass
 
 
 class AIRateLimitError(AIServiceError):
     """AI API レート制限エラー"""
+
     pass

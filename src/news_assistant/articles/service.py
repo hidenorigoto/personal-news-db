@@ -26,7 +26,7 @@ class ArticleService:
             db_article = Article(
                 url=str(article_data.url),
                 title=article_data.title,
-                summary=article_data.summary or ""
+                summary=article_data.summary or "",
             )
             db.add(db_article)
             db.commit()
@@ -37,7 +37,7 @@ class ArticleService:
             raise DatabaseError(
                 "記事の作成に失敗しました。URLが既に登録されている可能性があります。",
                 error_code="DUPLICATE_URL",
-                details={"url": str(article_data.url)}
+                details={"url": str(article_data.url)},
             ) from e
 
     def create_article_with_processing(self, db: Session, article_data: ArticleCreate) -> Article:
@@ -45,9 +45,7 @@ class ArticleService:
         try:
             # まず記事をDBに保存（IDを取得するため）
             db_article = Article(
-                url=str(article_data.url),
-                title=article_data.title,
-                summary=""  # 後で更新
+                url=str(article_data.url), title=article_data.title, summary=""  # 後で更新
             )
             db.add(db_article)
             db.commit()
@@ -59,7 +57,7 @@ class ArticleService:
                     url=str(article_data.url),
                     fallback_title=article_data.title,
                     article_id=int(db_article.id),
-                    generate_summary_flag=True
+                    generate_summary_flag=True,
                 )
 
                 # 処理結果で記事を更新
@@ -75,6 +73,7 @@ class ArticleService:
                 db.refresh(db_article)
                 # ログに記録（例外は再発生させない）
                 import logging
+
                 logging.warning(f"Content processing failed for article {db_article.id}: {e}")
 
             return db_article
@@ -84,7 +83,7 @@ class ArticleService:
             raise DatabaseError(
                 "記事の作成に失敗しました。URLが既に登録されている可能性があります。",
                 error_code="DUPLICATE_URL",
-                details={"url": str(article_data.url)}
+                details={"url": str(article_data.url)},
             ) from e
 
     @staticmethod
@@ -106,28 +105,16 @@ class ArticleService:
         return db.query(Article).filter(Article.url == url).first()
 
     @staticmethod
-    def get_articles(
-        db: Session,
-        skip: int = 0,
-        limit: int = 100
-    ) -> tuple[list[Article], int]:
+    def get_articles(db: Session, skip: int = 0, limit: int = 100) -> tuple[list[Article], int]:
         """記事一覧を取得（ページネーション対応）"""
         total = db.query(Article).count()
         articles = (
-            db.query(Article)
-            .order_by(Article.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-            .all()
+            db.query(Article).order_by(Article.created_at.desc()).offset(skip).limit(limit).all()
         )
         return articles, total
 
     @staticmethod
-    def update_article(
-        db: Session,
-        article_id: int,
-        article_data: ArticleUpdate
-    ) -> Article:
+    def update_article(db: Session, article_id: int, article_data: ArticleUpdate) -> Article:
         """記事を更新"""
         article = ArticleService.get_article_by_id(db, article_id)
 
@@ -144,7 +131,7 @@ class ArticleService:
             raise DatabaseError(
                 "記事の更新に失敗しました",
                 error_code="UPDATE_FAILED",
-                details={"article_id": article_id}
+                details={"article_id": article_id},
             ) from e
 
     @staticmethod
@@ -161,5 +148,5 @@ class ArticleService:
             raise DatabaseError(
                 "記事の削除に失敗しました",
                 error_code="DELETE_FAILED",
-                details={"article_id": article_id}
+                details={"article_id": article_id},
             ) from e

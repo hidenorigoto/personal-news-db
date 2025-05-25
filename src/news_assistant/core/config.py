@@ -21,46 +21,26 @@ class Settings(BaseSettings):
     database_url: str = Field(
         default="sqlite:///./data/news.db",
         alias="NEWS_ASSISTANT_DB_URL",
-        description="データベース接続URL"
+        description="データベース接続URL",
     )
 
     # OpenAI API設定
     openai_api_key: str | None = Field(
-        default=None,
-        alias="OPENAI_API_KEY",
-        description="OpenAI APIキー"
+        default=None, alias="OPENAI_API_KEY", description="OpenAI APIキー"
     )
 
     # ファイル保存設定
-    data_dir: str = Field(
-        default="data",
-        description="データファイル保存ディレクトリ"
-    )
+    data_dir: str = Field(default="data", description="データファイル保存ディレクトリ")
 
     # AI要約設定
-    summary_model: str = Field(
-        default="gpt-3.5-turbo",
-        description="要約生成に使用するモデル"
-    )
-    summary_max_tokens: int = Field(
-        default=900,
-        description="要約生成の最大トークン数"
-    )
-    summary_temperature: float = Field(
-        default=0.3,
-        description="要約生成の温度パラメータ"
-    )
+    summary_model: str = Field(default="gpt-3.5-turbo", description="要約生成に使用するモデル")
+    summary_max_tokens: int = Field(default=900, description="要約生成の最大トークン数")
+    summary_temperature: float = Field(default=0.3, description="要約生成の温度パラメータ")
 
     # HTTP設定
-    request_timeout: int = Field(
-        default=10,
-        description="HTTP リクエストタイムアウト（秒）"
-    )
+    request_timeout: int = Field(default=10, description="HTTP リクエストタイムアウト（秒）")
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8"
-    )
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
 @lru_cache

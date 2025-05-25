@@ -33,7 +33,7 @@ class SummarizerService:
                 base_url=None,
                 max_tokens=1000,
                 temperature=0.3,
-                timeout=30
+                timeout=30,
             )
         else:
             # API キーがない場合はモックプロバイダーを使用
@@ -45,7 +45,7 @@ class SummarizerService:
                 base_url=None,
                 max_tokens=1000,
                 temperature=0.3,
-                timeout=30
+                timeout=30,
             )
 
     def _create_provider(self) -> AIProvider:
@@ -56,8 +56,7 @@ class SummarizerService:
             return MockAIProvider(self.config)
         else:
             raise AIConfigurationError(
-                f"Unsupported provider: {self.config.provider}",
-                error_code="UNSUPPORTED_PROVIDER"
+                f"Unsupported provider: {self.config.provider}", error_code="UNSUPPORTED_PROVIDER"
             )
 
     def generate_summary(
@@ -66,7 +65,7 @@ class SummarizerService:
         style: SummaryStyle = SummaryStyle.CONCISE,
         max_length: int | None = None,
         language: str = "ja",
-        custom_prompt: str | None = None
+        custom_prompt: str | None = None,
     ) -> SummaryResponse:
         """要約を生成
 
@@ -84,17 +83,14 @@ class SummarizerService:
             SummaryGenerationError: 要約生成に失敗した場合
         """
         if not content.strip():
-            raise SummaryGenerationError(
-                "Content cannot be empty",
-                error_code="EMPTY_CONTENT"
-            )
+            raise SummaryGenerationError("Content cannot be empty", error_code="EMPTY_CONTENT")
 
         request = SummaryRequest(
             content=content,
             style=style,
             max_length=max_length,
             language=language,
-            custom_prompt=custom_prompt
+            custom_prompt=custom_prompt,
         )
 
         try:
@@ -121,8 +117,7 @@ class SummarizerService:
         except Exception as e:
             logger.error(f"Simple summary generation failed: {e}")
             raise SummaryGenerationError(
-                f"Summary generation failed: {e}",
-                error_code="SIMPLE_GENERATION_FAILED"
+                f"Summary generation failed: {e}", error_code="SIMPLE_GENERATION_FAILED"
             ) from e
 
     def test_connection(self) -> bool:
@@ -140,7 +135,7 @@ class SummarizerService:
             "model_name": self.config.model_name,
             "max_tokens": self.config.max_tokens,
             "temperature": self.config.temperature,
-            "connection_status": self.test_connection()
+            "connection_status": self.test_connection(),
         }
 
     def update_config(self, config: AIConfig) -> None:

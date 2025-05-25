@@ -10,7 +10,7 @@ app = FastAPI(
     title=settings.app_name,
     version=settings.version,
     debug=settings.debug,
-    description="AI-powered news collection and summarization service"
+    description="AI-powered news collection and summarization service",
 )
 
 # データベーステーブル作成
@@ -28,5 +28,5 @@ async def root() -> dict[str, str | bool]:
         "message": settings.app_name,
         "version": settings.version,
         "status": "running",
-        "debug": settings.debug
+        "debug": settings.debug,
     }

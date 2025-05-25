@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class AIProviderType(str, Enum):
     """AI プロバイダータイプ"""
+
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
     GOOGLE = "google"
@@ -16,14 +17,16 @@ class AIProviderType(str, Enum):
 
 class SummaryStyle(str, Enum):
     """要約スタイル"""
-    CONCISE = "concise"      # 簡潔
-    DETAILED = "detailed"    # 詳細
+
+    CONCISE = "concise"  # 簡潔
+    DETAILED = "detailed"  # 詳細
     BULLET_POINTS = "bullet_points"  # 箇条書き
     EXECUTIVE = "executive"  # エグゼクティブサマリー
 
 
 class AIConfig(BaseModel):
     """AI設定"""
+
     model_config = ConfigDict(extra="forbid")
 
     provider: AIProviderType = Field(..., description="AI プロバイダー")
@@ -37,6 +40,7 @@ class AIConfig(BaseModel):
 
 class SummaryRequest(BaseModel):
     """要約リクエスト"""
+
     model_config = ConfigDict(extra="forbid")
 
     content: str = Field(..., min_length=1, description="要約対象のテキスト")
@@ -48,6 +52,7 @@ class SummaryRequest(BaseModel):
 
 class SummaryResponse(BaseModel):
     """要約レスポンス"""
+
     model_config = ConfigDict(extra="forbid")
 
     summary: str = Field(..., description="生成された要約")
@@ -63,6 +68,7 @@ class SummaryResponse(BaseModel):
 
 class AIUsageStats(BaseModel):
     """AI使用統計"""
+
     model_config = ConfigDict(extra="forbid")
 
     provider: AIProviderType = Field(..., description="プロバイダー")
@@ -78,6 +84,7 @@ class AIUsageStats(BaseModel):
 
 class PromptTemplate(BaseModel):
     """プロンプトテンプレート"""
+
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(..., description="テンプレート名")

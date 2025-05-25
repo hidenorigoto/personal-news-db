@@ -28,7 +28,7 @@ class ContentProcessor:
         url: str,
         fallback_title: str = "",
         article_id: int | None = None,
-        generate_summary_flag: bool = True
+        generate_summary_flag: bool = True,
     ) -> ProcessedContent:
         """URLを処理して完全なコンテンツデータを生成"""
         try:
@@ -59,13 +59,14 @@ class ContentProcessor:
                 file_path = self._save_content(content_data, article_id)
 
             from pydantic import HttpUrl
+
             return ProcessedContent(
                 url=HttpUrl(url),
                 title=final_title,
                 extracted_text=extracted_text,
                 summary=summary,
                 extension=content_data.extension,
-                file_path=file_path
+                file_path=file_path,
             )
 
         except Exception as e:
@@ -74,7 +75,7 @@ class ContentProcessor:
             raise ContentProcessingError(
                 f"Content processing failed for {url}: {e}",
                 error_code="PROCESSING_FAILED",
-                details={"url": url}
+                details={"url": url},
             ) from e
 
     def _save_content(self, content_data: ContentData, article_id: int) -> str:
@@ -96,7 +97,7 @@ class ContentProcessor:
             raise ContentProcessingError(
                 f"Failed to save content: {e}",
                 error_code="SAVE_FAILED",
-                details={"article_id": article_id, "filename": filename}
+                details={"article_id": article_id, "filename": filename},
             ) from e
 
     def extract_title_only(self, url: str, fallback_title: str = "") -> str:
