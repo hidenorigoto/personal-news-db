@@ -4,7 +4,9 @@ from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
-from news_assistant.models import Base
+from news_assistant.core.database import Base
+# すべてのモデルをインポートしてAlembicが認識できるようにする
+from news_assistant.articles.models import Article  # noqa: F401
 
 # Load environment variables
 load_dotenv()

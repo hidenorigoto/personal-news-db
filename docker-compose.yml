@@ -38,6 +38,8 @@ services:
       - ./data:/app/data
       - ./pyproject.toml:/app/pyproject.toml
       - ./poetry.lock:/app/poetry.lock
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
     environment:
       - NEWS_ASSISTANT_DB_URL=sqlite:///./data/news.db
       - PYTHONPATH=/app
