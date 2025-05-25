@@ -1,0 +1,346 @@
+---
+description: SQLAlchemyプロジェクトでの本番・テスト環境DB分離のベストプラクティス
+globs: 
+alwaysApply: false
+---
+## SQLAlchemyプロジェクトでの本番・テスト環境DB分離のベストプラクティス
+
+### 1. 環境設定による設定の分離
+
+環境変数を使用してデータベース設定を分離することが標準的なアプローチです。以下のような設定構造が推奨されます：
+
+```python
+# config.py
+import os
+from functools import lru_cache
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True
+    )
+    
+    # アプリケーション設定
+    app_name: str = "News Assistant"
+    version: str = "0.1.0"
+    debug: bool = Field(default=True)
+    environment: str = Field(default="development")
+    
+    # データベース設定
+    database_url: str = Field(
+        default="sqlite:///./data/news.db",
+        alias="NEWS_ASSISTANT_DB_URL"
+    )
+
+@lru_cache()
+def get_settings() -> Settings:
+    """設定のシングルトンインスタンスを取得"""
+    return Settings()
+
+settings = get_settings()
+```
+
+### 1.1. 実装例：FastAPI + SQLAlchemy 2.0
+
+```python
+# core/database.py
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from .config import settings
+
+# SQLiteの場合の特別な設定
+connect_args = {}
+if settings.database_url.startswith("sqlite"):
+    connect_args = {
+        "check_same_thread": False,
+        "poolclass": StaticPool,
+    }
+
+engine = create_engine(
+    settings.database_url,
+    connect_args=connect_args,
+    echo=settings.debug
+)
+
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
+)
+
+Base = declarative_base()
+
+def get_db():
+    """データベースセッションの依存関係"""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+```
+
+### 2. テスト用データベースの設計パターン
+
+#### 2.1. 環境変数による分離（実装済みアプローチ）
+
+テスト実行前に環境変数を設定することで、アプリケーションコードを変更せずにテスト用データベースを使用：
+
+```python
+# tests/conftest.py
+"""テスト設定とフィクスチャ"""
+import os
+from collections.abc import Generator
+
+# アプリケーションのインポート前に環境変数を設定
+os.environ["NEWS_ASSISTANT_DB_URL"] = "sqlite:///:memory:"
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from news_assistant.core.database import Base, get_db
+from news_assistant.main import app
+
+# テスト用のin-memoryデータベース設定
+TEST_DATABASE_URL = "sqlite:///:memory:"
+
+engine = create_engine(
+    TEST_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
+
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+```
+
+#### 2.2. セッション管理とトランザクション分離
+
+各テストを独立したトランザクション内で実行し、テスト終了時にロールバック：
+
+```python
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_database() -> Generator[None, None, None]:
+    """テストセッション開始時にテーブルを作成"""
+    Base.metadata.create_all(bind=engine)
+    yield
+    Base.metadata.drop_all(bind=engine)
+
+@pytest.fixture
+def db_session() -> Generator[Session, None, None]:
+    """各テスト用のデータベースセッション"""
+    connection = engine.connect()
+    transaction = connection.begin()
+    session = TestingSessionLocal(bind=connection)
+
+    yield session
+
+    session.close()
+    transaction.rollback()
+    connection.close()
+
+@pytest.fixture
+def client(db_session: Session) -> Generator[TestClient, None, None]:
+    """テスト用のFastAPIクライアント"""
+    def override_get_db() -> Generator[Session, None, None]:
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    with TestClient(app) as test_client:
+        yield test_client
+
+    app.dependency_overrides.clear()
+```
+
+#### 2.3. 重要なポイント
+
+1. **環境変数の早期設定**: アプリケーションのインポート前に環境変数を設定
+2. **StaticPool使用**: SQLiteのin-memoryデータベースでの接続プール管理
+3. **依存関係オーバーライド**: FastAPIの依存関係注入システムを活用
+4. **自動クリーンアップ**: テスト終了時の自動的なリソース解放
+
+### 3. マイグレーション管理
+
+#### Alembicでの環境変数設定
+
+Alembicの環境ファイル（env.py）で環境変数を動的に読み込む設定が重要です：
+
+```python
+# alembic/env.py
+import os
+from alembic import context
+from sqlalchemy import create_engine
+
+def get_url():
+    """環境に応じたデータベースURLを取得"""
+    return os.getenv("DATABASE_URL", "sqlite:///default.db")
+
+def run_migrations_online():
+    connectable = create_engine(get_url())
+    # マイグレーション実行ロジック
+    
+config = context.config
+config.set_main_option('sqlalchemy.url', get_url())
+```
+
+### 4. FastAPIライフサイクル管理との統合
+
+#### 4.1. アプリケーション初期化時のテーブル作成
+
+FastAPIのライフサイクル機能を使用して、開発環境でのテーブル自動作成：
+
+```python
+# main.py
+import os
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+
+from .core import create_tables, settings
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    # アプリケーション開始時
+    if os.getenv('APP_ENV') != 'production':
+        create_tables()
+    
+    yield
+
+# アプリケーション初期化
+app = FastAPI(
+    title=settings.app_name,
+    version=settings.version,
+    debug=settings.debug,
+    description="AI-powered news collection and summarization service",
+    lifespan=lifespan,
+)
+```
+
+#### 4.2. Docker環境での分離
+
+Docker Composeを使用した環境分離：
+
+```yaml
+# docker-compose.yml
+services:
+  test:
+    build: .
+    command: sh -c "PYTHONPATH=/app pytest"
+    volumes:
+      - ./src/news_assistant:/app/news_assistant
+      - ./tests:/app/tests
+      - ./data:/app/data
+    environment:
+      - NEWS_ASSISTANT_DB_URL=sqlite:///:memory:
+      - PYTHONPATH=/app
+
+  app-dev:
+    build: .
+    command: uvicorn news_assistant.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./src/news_assistant:/app/news_assistant
+      - ./data:/app/data
+    environment:
+      - NEWS_ASSISTANT_DB_URL=sqlite:///./data/news.db
+      - PYTHONPATH=/app
+```
+
+#### 4.3. 最新のテスト戦略（2024-2025年）
+
+1. **専用テストコンテナ**: 開発用コンテナとは分離されたテスト専用環境
+2. **環境変数による設定**: アプリケーションコードを変更せずに設定切り替え
+3. **型安全性**: Python 3.12+ の型ヒントとMyPyによる厳密な型チェック
+4. **collections.abc使用**: 最新のPythonベストプラクティスに準拠
+
+### 5. 環境変数の管理
+
+#### .envファイルとpython-dotenvの活用
+
+開発環境では.envファイルとpython-dotenvを使用して環境変数を管理：
+
+```bash
+# .env.development
+DATABASE_URL=postgresql://dev:dev@localhost/myapp_dev
+DEBUG=True
+
+# .env.testing  
+DATABASE_URL=sqlite:///:memory:
+TESTING=True
+
+# .env.production
+DATABASE_URL=postgresql://prod_user:prod_pass@prod_host/myapp_prod
+DEBUG=False
+```
+
+### 6. 実装時の注意点とトラブルシューティング
+
+#### 6.1. 型アノテーションのベストプラクティス
+
+```python
+# 正しい型アノテーション（Python 3.12+）
+from collections.abc import AsyncGenerator, Generator
+from sqlalchemy.orm import Session
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    yield
+
+@pytest.fixture
+def db_session() -> Generator[Session, None, None]:
+    yield session
+```
+
+#### 6.2. 環境変数設定のタイミング
+
+```python
+# ❌ 間違い：インポート後の設定
+import pytest
+from app.main import app
+os.environ["DB_URL"] = "sqlite:///:memory:"
+
+# ✅ 正しい：インポート前の設定
+import os
+os.environ["DB_URL"] = "sqlite:///:memory:"
+import pytest
+from app.main import app
+```
+
+#### 6.3. Ruff設定での例外処理
+
+```toml
+# pyproject.toml
+[tool.ruff.lint.per-file-ignores]
+"tests/conftest.py" = ["E402"]  # モジュールレベルインポートの例外
+```
+
+#### 6.4. テスト実行コマンド
+
+```bash
+# 専用テストコンテナでの実行（推奨）
+make test
+# または
+docker compose run --rm test
+
+# 開発コンテナでのテスト実行は避ける
+# docker compose run --rm app-dev pytest  # ❌
+```
+
+### 7. まとめ
+
+このアプローチにより以下が実現できます：
+
+1. **完全な環境分離**: 開発・テスト・本番で異なるデータベース使用
+2. **コードの変更不要**: 環境変数のみで設定切り替え
+3. **高速テスト実行**: in-memoryデータベースによる高速化
+4. **型安全性**: 厳密な型チェックによる品質保証
+5. **Docker統合**: コンテナベースの一貫した開発環境
+
+これらのベストプラクティスにより、データベース不可知性を保ちながら、開発・テスト・本番の各環境で適切なデータベース設定を使い分けることができます。
