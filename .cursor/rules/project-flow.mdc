@@ -26,6 +26,18 @@ alwaysApply: true
 - エラーメッセージを詳細に分析
 - 成功・失敗の判定を明確に行う
 
+### 4. テスト実行の原則
+- **必ずテスト専用コンテナを使用する**
+- 開発用コンテナ（app-dev）ではテストを実行しない
+- テスト実行コマンド: `docker compose run --rm test`
+- テスト環境は独立したデータベースを使用
+
+### 5. 依存関係変更時の必須手順
+- **pyproject.tomlに依存関係を追加した場合は必ずリビルドする**
+- 全コンテナのリビルドコマンド: `docker compose build --no-cache`
+- 特定サービスのリビルド: `docker compose build --no-cache [service-name]`
+- リビルド後は必ずコンテナを再起動: `docker compose up -d`
+
 ## 環境状態確認チェックリスト
 
 ### Phase 1: Docker環境チェック
@@ -189,11 +201,11 @@ with open('app/main.py', 'w') as f:
 \"
 "
 
-# Step 6: テスト実行
-docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli pytest tests/test_new_feature.py -v
+# Step 6: テスト実行（専用コンテナ使用）
+docker compose run --rm test pytest tests/test_new_feature.py -v
 
-# Step 7: 全体テスト実行
-docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli pytest -v
+# Step 7: 全体テスト実行（専用コンテナ使用）
+docker compose run --rm test pytest -v
 
 # Step 8: 動作確認
 curl -f http://localhost:8000/api/v1/new-feature | jq '.'
@@ -341,24 +353,21 @@ except Exception as e:
 ### 1. 自動コード品質チェック
 
 ```bash
-# 完全な品質チェックスイート
-docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli bash -c "
+# 完全な品質チェックスイート（poetryコンテナ使用）
+docker compose run --rm poetry bash -c "
 echo '=== Running Code Quality Checks ==='
 
 echo '1. Code formatting with Black...'
-black --check app tests || (echo 'Format issues found' && black app tests)
+black --check news_assistant tests || (echo 'Format issues found' && black news_assistant tests)
 
 echo '2. Import sorting with isort...'
-isort --check-only app tests || (echo 'Import issues found' && isort app tests)
+isort --check-only news_assistant tests || (echo 'Import issues found' && isort news_assistant tests)
 
 echo '3. Linting with Ruff...'
-ruff check app tests
+ruff check news_assistant tests
 
 echo '4. Type checking with MyPy...'
-mypy app
-
-echo '5. Security check with Bandit...'
-bandit -r app
+mypy news_assistant
 
 echo '=== Code Quality Check Complete ==='
 "
@@ -367,21 +376,21 @@ echo '=== Code Quality Check Complete ==='
 ### 2. テスト実行プロトコル
 
 ```bash
-# 包括的テスト実行
-docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile test run --rm test bash -c "
+# 包括的テスト実行（専用testコンテナ使用）
+docker compose run --rm test bash -c "
 echo '=== Running Test Suite ==='
 
-echo '1. Unit tests...'
-pytest tests/unit/ -v --tb=short
+echo '1. 新しいモジュール構造テスト...'
+pytest tests/test_new_structure.py -v --tb=short
 
-echo '2. Integration tests...'
-pytest tests/integration/ -v --tb=short
+echo '2. 既存機能テスト...'
+pytest tests/test_main.py -v --tb=short
 
-echo '3. API tests...'
-pytest tests/api/ -v --tb=short
+echo '3. 全テスト実行...'
+pytest tests/ -v --tb=short
 
 echo '4. Coverage report...'
-pytest --cov=app --cov-report=term --cov-report=html
+pytest --cov=news_assistant --cov-report=term --cov-report=html
 
 echo '=== Test Suite Complete ==='
 "
@@ -424,23 +433,44 @@ API応答なし
     └── コンテナ設定確認
 ```
 
+## 依存関係変更時の完全手順
+
+### pyproject.toml変更後の必須ステップ
+
+```bash
+# Step 1: 全コンテナのリビルド（キャッシュなし）
+docker compose build --no-cache
+
+# Step 2: 既存コンテナの停止・削除
+docker compose down
+
+# Step 3: 新しいコンテナで起動
+docker compose up -d
+
+# Step 4: 依存関係の確認
+docker compose run --rm test python -c "import pydantic_settings; print('Dependencies OK')"
+
+# Step 5: テスト実行で動作確認
+docker compose run --rm test pytest tests/test_new_structure.py -v
+```
+
 ## 定期メンテナンス手順
 
 ### 日次チェック
 
 ```bash
 # 毎日実行推奨の健全性チェック
-docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli bash -c "
+docker compose run --rm poetry bash -c "
 echo '=== Daily Health Check ==='
 
 echo '1. Service status...'
 curl -f http://localhost:8000/health
 
 echo '2. Application import test...'
-python -c 'from app.main import app; print(\"App OK\" if app else \"App ERROR\")'
+python -c 'from news_assistant.main import app; print(\"App OK\" if app else \"App ERROR\")'
 
 echo '3. Configuration test...'
-python -c 'from app.core.config import settings; print(f\"Config OK - {settings.ENVIRONMENT}\")'
+python -c 'from news_assistant.core import settings; print(f\"Config OK - {settings.app_name}\")'
 
 echo '4. Basic API test...'
 python -c 'import requests; r = requests.get(\"http://localhost:8000/\"); print(f\"API OK - Status: {r.status_code}\")'
