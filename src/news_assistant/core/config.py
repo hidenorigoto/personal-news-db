@@ -29,6 +29,14 @@ class Settings(BaseSettings):
         default=None, alias="OPENAI_API_KEY", description="OpenAI APIキー"
     )
 
+    # Azure Speech Service設定
+    azure_speech_key: str | None = Field(
+        default=None, alias="AZURE_SPEECH_KEY", description="Azure Speech Service APIキー"
+    )
+    azure_speech_region: str = Field(
+        default="japaneast", alias="AZURE_SPEECH_REGION", description="Azure Speech Serviceリージョン"
+    )
+
     # ファイル保存設定
     data_dir: str = Field(default="data", description="データファイル保存ディレクトリ")
 
