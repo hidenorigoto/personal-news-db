@@ -4,20 +4,39 @@
 
 ## 機能
 
-- ニュース記事のURLとタイトルの登録
-- **AI要約自動生成** (OpenAI API使用)
-- 登録済み記事の一覧表示
-- 個別記事の詳細表示
-- ヘルスチェック機能
-- データベースマイグレーション対応
+- **記事の自動処理**: URLから記事のタイトル・内容を自動抽出
+- **AI要約自動生成**: OpenAI APIを使用した高品質な要約生成
+- **多様なコンテンツ対応**: HTML、PDF、テキストファイルの処理
+- **RESTful API**: 記事の登録・取得・更新・削除
+- **ヘルスチェック機能**: システム状態の監視
+- **データベースマイグレーション**: Alembicによるスキーマ管理
+- **型安全性**: MyPyによる厳密な型チェック
+- **コード品質**: Ruff、Blackによる自動整形・リンティング
+
+## アーキテクチャ
+
+本プロジェクトは**モジュール機能ベース構造**を採用し、以下の特徴を持ちます：
+
+- **ドメイン駆動設計**: 各機能が独立したモジュールとして分離
+- **責務の明確化**: router、service、model、schemaの明確な分離
+- **スケーラビリティ**: 新機能追加時の影響範囲を限定
+- **保守性**: 関連するコードが同一モジュール内に集約
+- **テスタビリティ**: モジュール単位での独立したテスト
 
 ## APIエンドポイント
 
+### 基本情報
 - `GET /` - API基本情報
-- `GET /health` - ヘルスチェック
-- `POST /api/articles/` - 記事登録
-- `GET /api/articles/` - 記事一覧取得
+- `GET /health` - ヘルスチェック（データベース状態含む）
+
+### 記事管理
+- `POST /api/articles/` - 記事登録（URL自動処理・要約生成）
+- `GET /api/articles/` - 記事一覧取得（ページネーション対応）
 - `GET /api/articles/{id}` - 個別記事取得
+- `PUT /api/articles/{id}` - 記事更新
+- `DELETE /api/articles/{id}` - 記事削除
+
+### ドキュメント
 - `GET /docs` - Swagger UI
 - `GET /redoc` - ReDoc
 
@@ -31,141 +50,266 @@ OPENAI_API_KEY=your_openai_api_key_here
 
 # データベース設定
 NEWS_ASSISTANT_DB_URL=sqlite:///./data/news.db
+
+# アプリケーション設定
+DEBUG=true
+APP_NAME="News Assistant API"
 ```
 
 ## セットアップ
 
-### Poetry使用の場合
+### Docker使用（推奨）
+
+#### 開発環境の起動
+```bash
+# 基本的な開発環境（API + DB）
+docker compose up app-dev
+
+# テスト実行
+docker compose run --rm test
+
+# Poetry環境でのコマンド実行
+docker compose run --rm poetry bash
+```
+
+#### データベースマイグレーション
+```bash
+# マイグレーション実行
+docker compose run --rm test poetry run alembic upgrade head
+
+# 新しいマイグレーション作成
+docker compose run --rm poetry alembic revision --autogenerate -m "変更内容の説明"
+```
+
+### Poetry使用（ローカル開発）
 
 1. 必要なパッケージのインストール:
 ```bash
 poetry install
 ```
 
-2. 仮想環境の有効化（必要に応じて）:
-```bash
-poetry shell
-```
-
-3. サーバーの起動:
+2. サーバーの起動:
 ```bash
 poetry run uvicorn news_assistant.main:app --reload
 ```
 
-### Docker使用の場合（推奨）
-
-#### 開発用（ホットリロード）
-```bash
-docker compose up app-dev
-```
-- ホストのsrc, data, pyproject.toml, poetry.lockをマウントし、コード変更が即時反映されます。
-
-#### 本番用
-```bash
-docker compose up app
-```
-- ビルド済みイメージで起動します。
-- `data/`ディレクトリはDockerボリュームで永続化されます。
-
-#### 停止
-```bash
-docker compose down
-```
-
-## データベースマイグレーション
-
-### 初期セットアップ
-```bash
-# マイグレーション実行
-docker compose run --rm poetry alembic upgrade head
-```
-
-### 新しいマイグレーション作成
-```bash
-# モデル変更後にマイグレーション生成
-docker compose run --rm poetry alembic revision --autogenerate -m "変更内容の説明"
-
-# マイグレーション適用
-docker compose run --rm poetry alembic upgrade head
-```
-
 ## 開発ツール
 
-### Makefileコマンド（推奨）
+### コード品質チェック
 ```bash
-make test      # テスト実行
-make ruff      # リンティング・フォーマット
-make mypy      # 型チェック
-make black     # コードフォーマット
+# 全体的な品質チェック
+docker compose run --rm test poetry run ruff check news_assistant --fix
+docker compose run --rm test poetry run mypy news_assistant
+docker compose run --rm test pytest -v
+
+# 個別ツール実行
+docker compose run --rm poetry ruff format news_assistant  # フォーマット
+docker compose run --rm poetry ruff check news_assistant   # リンティング
+docker compose run --rm poetry mypy news_assistant         # 型チェック
 ```
 
-### Poetryコマンド（直接実行）
+### テスト実行
 ```bash
-poetry run pytest           # テスト
-poetry run ruff .           # リンティング
-poetry run mypy .           # 型チェック
-poetry run black .          # フォーマット
+# 全テスト実行
+docker compose run --rm test pytest -v
+
+# 特定のテストファイル
+docker compose run --rm test pytest tests/test_articles.py -v
+
+# カバレッジ付きテスト
+docker compose run --rm test pytest --cov=news_assistant --cov-report=html
 ```
-
-### Dockerコマンド
-```bash
-docker compose run --rm test     # テスト実行
-docker compose run --rm poetry   # Poetry環境でシェル起動
-```
-
-## API仕様
-
-APIの詳細な仕様は、サーバー起動後に以下のURLで確認できます：
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
-- ヘルスチェック: http://localhost:8000/health
 
 ## プロジェクト構造
 
 ```
 news-assistant/
-├── src/news_assistant/     # メインアプリケーション
-│   ├── main.py            # FastAPIアプリケーション
-│   ├── models.py          # データベースモデル
-│   ├── schemas.py         # Pydanticスキーマ
-│   ├── database.py        # データベース設定
-│   └── summary.py         # AI要約機能
-├── tests/                 # テストファイル
-├── alembic/              # データベースマイグレーション
-├── docs/                 # 設計ドキュメント
-├── data/                 # データベース・ファイル保存
-├── docker-compose.yml    # Docker設定
-├── pyproject.toml        # プロジェクト設定
-└── Makefile             # 開発ツールコマンド
+├── src/news_assistant/           # メインアプリケーション
+│   ├── main.py                  # FastAPIアプリケーション
+│   ├── summary.py               # 後方互換性ラッパー
+│   │
+│   ├── core/                    # 共通設定・データベース
+│   │   ├── __init__.py         # モジュールエクスポート
+│   │   ├── config.py           # アプリケーション設定
+│   │   ├── database.py         # データベース接続設定
+│   │   └── exceptions.py       # カスタム例外定義
+│   │
+│   ├── articles/                # 記事管理機能
+│   │   ├── __init__.py         # モジュールエクスポート
+│   │   ├── models.py           # SQLAlchemyモデル
+│   │   ├── schemas.py          # Pydanticスキーマ
+│   │   ├── router.py           # APIエンドポイント
+│   │   └── service.py          # ビジネスロジック
+│   │
+│   ├── ai/                      # AI・要約機能
+│   │   ├── __init__.py         # モジュールエクスポート
+│   │   ├── schemas.py          # AI設定スキーマ
+│   │   ├── providers.py        # AIプロバイダー実装
+│   │   └── summarizer.py       # 要約サービス
+│   │
+│   ├── content/                 # コンテンツ処理機能
+│   │   ├── __init__.py         # モジュールエクスポート
+│   │   ├── schemas.py          # コンテンツスキーマ
+│   │   ├── extractor.py        # コンテンツ抽出
+│   │   └── processor.py        # コンテンツ処理
+│   │
+│   ├── health/                  # ヘルスチェック機能
+│   │   ├── __init__.py         # モジュールエクスポート
+│   │   └── router.py           # ヘルスチェックAPI
+│   │
+│   └── shared/                  # 共有ユーティリティ
+│       └── __init__.py         # 共通ヘルパー関数
+│
+├── tests/                       # テストファイル
+│   ├── conftest.py             # テスト設定・フィクスチャ
+│   ├── test_main.py            # 統合テスト
+│   ├── test_articles.py        # 記事機能テスト
+│   ├── test_ai.py              # AI機能テスト
+│   ├── test_content.py         # コンテンツ処理テスト
+│   └── test_new_structure.py   # 新構造テスト
+│
+├── alembic/                     # データベースマイグレーション
+│   ├── env.py                  # Alembic設定
+│   ├── versions/               # マイグレーションファイル
+│   └── alembic.ini             # Alembic設定ファイル
+│
+├── docs/                        # 設計ドキュメント
+├── data/                        # データベース・ファイル保存
+├── docker-compose.yml           # Docker設定
+├── pyproject.toml              # プロジェクト設定・依存関係
+└── README.md                   # このファイル
+```
+
+### モジュール設計の特徴
+
+#### 1. **articles/** - 記事管理
+- **models.py**: SQLAlchemyによるデータベースモデル
+- **schemas.py**: API入出力のPydanticスキーマ
+- **router.py**: FastAPIルーター（エンドポイント定義）
+- **service.py**: ビジネスロジック（データ処理・外部API連携）
+
+#### 2. **ai/** - AI・要約機能
+- **providers.py**: OpenAI、Mock等のAIプロバイダー実装
+- **summarizer.py**: 要約生成サービス
+- **schemas.py**: AI設定・リクエスト・レスポンススキーマ
+
+#### 3. **content/** - コンテンツ処理
+- **extractor.py**: URL先コンテンツの取得・抽出
+- **processor.py**: タイトル抽出・要約生成の統合処理
+- **schemas.py**: コンテンツデータスキーマ
+
+#### 4. **core/** - 共通基盤
+- **config.py**: 環境変数・アプリケーション設定
+- **database.py**: SQLAlchemy設定・セッション管理
+- **exceptions.py**: カスタム例外クラス
+
+## API仕様
+
+APIの詳細な仕様は、サーバー起動後に以下のURLで確認できます：
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+- **ヘルスチェック**: http://localhost:8000/health
+
+### 記事登録の例
+
+```bash
+# 記事登録（URL自動処理・要約生成）
+curl -X POST "http://localhost:8000/api/articles/" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com/news-article",
+    "title": "記事タイトル"
+  }'
 ```
 
 ## 設計ドキュメント
 
-詳細な設計ドキュメントは `docs/design.md` を参照してください。
+詳細な設計ドキュメントは以下を参照してください：
+- **要約機能設計**: `docs/summary_generation_design.md`
+- **使用技術・ライブラリ**: `docs/tools_and_libraries.md`
 
-記事要約自動生成機能の詳細な設計は [`docs/summary_generation_design.md`](docs/summary_generation_design.md) を参照してください。
+> **注**: 全体設計に関する情報は、このREADMEに統合されています。モジュール構造、API仕様、開発ガイドラインなど、プロジェクトの全体像を把握するために必要な情報はすべてここに記載されています。
+
+## 品質保証
+
+### テストカバレッジ
+- **55個のテスト**が全て成功
+- **単体テスト**: 各モジュールの独立テスト
+- **統合テスト**: API全体の動作テスト
+- **モックテスト**: 外部API依存の分離テスト
+
+### コード品質
+- **Ruff**: 高速リンティング・フォーマット
+- **MyPy**: 厳密な型チェック
+- **Black**: 一貫したコードスタイル
+- **警告ゼロ**: クリーンなコードベース
 
 ## トラブルシューティング
 
 ### よくある問題
 
 1. **OpenAI APIエラー**
-   - `OPENAI_API_KEY`環境変数が設定されているか確認
-   - APIキーが有効か確認
+   ```bash
+   # 環境変数確認
+   docker compose run --rm test printenv | grep OPENAI
+   ```
 
 2. **データベースエラー**
-   - `data/`ディレクトリの権限を確認
-   - マイグレーションが適用されているか確認
+   ```bash
+   # マイグレーション状態確認
+   docker compose run --rm test poetry run alembic current
+   
+   # マイグレーション実行
+   docker compose run --rm test poetry run alembic upgrade head
+   ```
 
-3. **Docker関連**
-   - `docker compose down && docker compose up app-dev`で再起動
-   - `docker system prune`でクリーンアップ
+3. **テスト失敗**
+   ```bash
+   # 詳細なテスト実行
+   docker compose run --rm test pytest -v --tb=short
+   
+   # 特定のテストのみ実行
+   docker compose run --rm test pytest tests/test_articles.py::test_create_article -v
+   ```
+
+4. **Docker関連**
+   ```bash
+   # 完全リセット
+   docker compose down
+   docker compose build --no-cache
+   docker compose up app-dev
+   ```
 
 ### ログ確認
 ```bash
 # アプリケーションログ
-docker compose logs app-dev
+docker compose logs app-dev --tail=50
 
 # 全サービスログ
 docker compose logs
+
+# リアルタイムログ監視
+docker compose logs -f app-dev
 ```
+
+### 開発時のベストプラクティス
+
+1. **依存関係追加時**:
+   ```bash
+   # pyproject.toml更新後は必ずリビルド
+   docker compose build --no-cache
+   ```
+
+2. **テスト実行**:
+   ```bash
+   # 必ずtest専用コンテナを使用
+   docker compose run --rm test pytest
+   ```
+
+3. **コード品質チェック**:
+   ```bash
+   # コミット前に必ず実行
+   docker compose run --rm test poetry run ruff check news_assistant --fix
+   docker compose run --rm test poetry run mypy news_assistant
+   docker compose run --rm test pytest -v
+   ```
