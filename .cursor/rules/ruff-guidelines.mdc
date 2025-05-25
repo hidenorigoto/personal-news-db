@@ -1,0 +1,601 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Ruffリンティングエラー予防ガイドライン
+
+## 概要
+
+このガイドラインは、Python開発においてRuffでのリンティングエラーを事前に防ぐための実践的な指針を提供します。Ruffは高速なPythonリンター・フォーマッターで、Black、isort、flake8、pyupgradeなどの機能を統合しています。
+
+## 1. Ruff基本設定とベストプラクティス
+
+### 1.1. pyproject.tomlでの推奨設定
+
+```toml
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM", "TCH"]
+extend-ignore = ["B008", "E501"]
+src = ["src"]
+
+[tool.ruff.lint.isort]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+known-first-party = ["news_assistant"]
+force-single-line = false
+case-sensitive = false
+
+[tool.ruff.lint.per-file-ignores]
+"tests/conftest.py" = ["E402"]  # モジュールレベルインポートの例外
+"tests/*.py" = ["S101"]  # assertの使用を許可
+"scripts/*.py" = ["T201"]  # printの使用を許可
+"alembic/versions/*.py" = ["E501", "F401"]  # 自動生成ファイルの例外
+```
+
+### 1.2. 主要なルールカテゴリ
+
+- **E**: pycodestyle errors（構文エラー）
+- **F**: pyflakes（未使用インポート、変数など）
+- **I**: isort（インポート順序）
+- **N**: pep8-naming（命名規則）
+- **W**: pycodestyle warnings（警告）
+- **UP**: pyupgrade（Python新機能への更新）
+- **B**: flake8-bugbear（バグの可能性）
+- **C4**: flake8-comprehensions（リスト内包表記）
+- **SIM**: flake8-simplify（コード簡素化）
+- **TCH**: flake8-type-checking（型チェック最適化）
+
+## 2. インポート関連のエラー対策
+
+### 2.1. インポート順序（I001）
+
+```python
+# ❌ 間違ったインポート順序
+import requests
+import os
+from fastapi import FastAPI
+from collections.abc import Generator
+
+# ✅ 正しいインポート順序
+import os
+from collections.abc import Generator
+
+import requests
+from fastapi import FastAPI
+
+from news_assistant.core import settings
+```
+
+### 2.2. 未使用インポート（F401）
+
+```python
+# ❌ 未使用インポート
+import os
+import sys  # 使用されていない
+from typing import List, Dict  # 使用されていない
+
+def get_env_var(key: str) -> str:
+    return os.getenv(key, "")
+
+# ✅ 必要なインポートのみ
+import os
+
+def get_env_var(key: str) -> str:
+    return os.getenv(key, "")
+```
+
+### 2.3. 型チェック用インポート（TCH001, TCH002）
+
+```python
+# ❌ ランタイムで不要な型インポート
+from sqlalchemy.orm import Session
+from fastapi import FastAPI
+
+def get_db() -> Session:
+    pass
+
+# ✅ TYPE_CHECKINGブロックの使用
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+    from fastapi import FastAPI
+
+def get_db() -> "Session":
+    pass
+```
+
+### 2.4. 環境変数設定でのE402対策
+
+```python
+# tests/conftest.py での特別なケース
+import os
+
+# アプリケーションのインポート前に環境変数を設定
+os.environ["NEWS_ASSISTANT_DB_URL"] = "sqlite:///:memory:"
+
+# この後のインポートはE402エラーになるが、
+# pyproject.tomlで除外設定済み
+import pytest
+from fastapi.testclient import TestClient
+```
+
+## 3. コードスタイル関連のエラー対策
+
+### 3.1. 行の長さ（E501）
+
+```python
+# ❌ 長すぎる行
+def create_user_with_very_long_function_name(name: str, email: str, password: str, is_active: bool = True) -> User:
+    return User(name=name, email=email, password=password, is_active=is_active)
+
+# ✅ 適切な改行
+def create_user_with_very_long_function_name(
+    name: str, 
+    email: str, 
+    password: str, 
+    is_active: bool = True
+) -> User:
+    return User(
+        name=name,
+        email=email,
+        password=password,
+        is_active=is_active
+    )
+```
+
+### 3.2. 空白行の問題（W293, W291）
+
+```python
+# ❌ 空白行に余分なスペース
+def function_one():
+    pass
+    # ここに余分なスペースがある
+def function_two():
+    pass
+
+# ✅ 適切な空白行
+def function_one():
+    pass
+
+def function_two():
+    pass
+```
+
+### 3.3. ファイル末尾の改行（W292）
+
+```python
+# ❌ ファイル末尾に改行なし
+def last_function():
+    pass# ここで終了（改行なし）
+
+# ✅ ファイル末尾に改行
+def last_function():
+    pass
+# ここに改行
+```
+
+## 4. Python新機能への更新（UP）
+
+### 4.1. collections.abcの使用（UP035）
+
+```python
+# ❌ 古いインポート
+from typing import List, Dict, Set, Generator, AsyncGenerator
+
+def process_items(items: List[str]) -> Dict[str, int]:
+    pass
+
+# ✅ 新しいインポート（Python 3.12+）
+from collections.abc import Generator, AsyncGenerator
+
+def process_items(items: list[str]) -> dict[str, int]:
+    pass
+```
+
+### 4.2. 型アノテーションの簡素化（UP006, UP007）
+
+```python
+# ❌ 古い型アノテーション
+from typing import Optional, Union, List, Dict
+
+def get_user(user_id: int) -> Optional[User]:
+    pass
+
+def process_data(data: Union[str, int]) -> List[Dict[str, str]]:
+    pass
+
+# ✅ 新しい型アノテーション
+def get_user(user_id: int) -> User | None:
+    pass
+
+def process_data(data: str | int) -> list[dict[str, str]]:
+    pass
+```
+
+### 4.3. f-stringの使用（UP032）
+
+```python
+# ❌ 古い文字列フォーマット
+name = "Alice"
+age = 30
+message = "Hello, {}. You are {} years old.".format(name, age)
+message2 = "Hello, %s. You are %d years old." % (name, age)
+
+# ✅ f-stringの使用
+name = "Alice"
+age = 30
+message = f"Hello, {name}. You are {age} years old."
+```
+
+## 5. バグの可能性（B）
+
+### 5.1. 可変デフォルト引数（B006）
+
+```python
+# ❌ 可変デフォルト引数
+def add_item(item: str, items: list = []):
+    items.append(item)
+    return items
+
+# ✅ Noneを使用
+def add_item(item: str, items: list | None = None):
+    if items is None:
+        items = []
+    items.append(item)
+    return items
+```
+
+### 5.2. 関数呼び出しをデフォルト引数に使用（B008）
+
+```python
+# ❌ 関数呼び出しをデフォルト引数に使用
+from datetime import datetime
+
+def create_log(message: str, timestamp: datetime = datetime.now()):
+    pass
+
+# ✅ Noneを使用して関数内で設定
+def create_log(message: str, timestamp: datetime | None = None):
+    if timestamp is None:
+        timestamp = datetime.now()
+    pass
+```
+
+### 5.3. except文での裸のexcept（B902）
+
+```python
+# ❌ 裸のexcept
+try:
+    risky_operation()
+except:
+    handle_error()
+
+# ✅ 具体的な例外を指定
+try:
+    risky_operation()
+except (ValueError, TypeError) as e:
+    handle_error(e)
+```
+
+## 6. 命名規則（N）
+
+### 6.1. 関数・変数名（N806）
+
+```python
+# ❌ 不適切な命名
+def getUserData(userId):
+    pass
+
+userName = "Alice"
+MAX_retry_count = 5
+
+# ✅ 適切な命名
+def get_user_data(user_id):
+    pass
+
+user_name = "Alice"
+MAX_RETRY_COUNT = 5
+```
+
+### 6.2. クラス名（N801）
+
+```python
+# ❌ 不適切なクラス名
+class userModel:
+    pass
+
+class HTTP_client:
+    pass
+
+# ✅ 適切なクラス名
+class UserModel:
+    pass
+
+class HTTPClient:
+    pass
+```
+
+### 6.3. 定数名（N806）
+
+```python
+# ❌ 不適切な定数名
+api_key = "secret"
+maxRetries = 3
+
+# ✅ 適切な定数名
+API_KEY = "secret"
+MAX_RETRIES = 3
+```
+
+## 7. コード簡素化（SIM）
+
+### 7.1. 不要なif文（SIM108）
+
+```python
+# ❌ 不要なif文
+def is_adult(age: int) -> bool:
+    if age >= 18:
+        return True
+    else:
+        return False
+
+# ✅ 直接返す
+def is_adult(age: int) -> bool:
+    return age >= 18
+```
+
+### 7.2. 辞書のget()メソッド（SIM118）
+
+```python
+# ❌ 不要なif文
+config = {"debug": True}
+if "debug" in config:
+    debug = config["debug"]
+else:
+    debug = False
+
+# ✅ get()メソッドの使用
+config = {"debug": True}
+debug = config.get("debug", False)
+```
+
+### 7.3. リスト内包表記（SIM110）
+
+```python
+# ❌ 不要なループ
+numbers = [1, 2, 3, 4, 5]
+even_numbers = []
+for num in numbers:
+    if num % 2 == 0:
+        even_numbers.append(num)
+
+# ✅ リスト内包表記
+numbers = [1, 2, 3, 4, 5]
+even_numbers = [num for num in numbers if num % 2 == 0]
+```
+
+## 8. FastAPI特有の対策
+
+### 8.1. 依存関数でのB008対策
+
+```python
+# ❌ B008エラーが発生
+from fastapi import Depends
+
+def get_db(session: Session = SessionLocal()):  # B008
+    pass
+
+# ✅ 適切な依存関数
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# pyproject.tomlで除外設定
+# extend-ignore = ["B008"]
+```
+
+### 8.2. Pydanticモデルでの命名
+
+```python
+# ✅ 適切なPydanticモデル
+from pydantic import BaseModel, Field
+
+class UserCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    email: str = Field(..., regex=r'^[^@]+@[^@]+\.[^@]+$')
+    is_active: bool = True
+    
+    class Config:
+        from_attributes = True
+```
+
+## 9. テストファイルでの特別な考慮事項
+
+### 9.1. assertの使用（S101）
+
+```python
+# tests/test_user.py
+# S101は通常テストファイルで除外
+
+def test_user_creation():
+    user = create_user("Alice", "alice@example.com")
+    assert user.name == "Alice"  # S101だが、テストでは許可
+    assert user.email == "alice@example.com"
+```
+
+### 9.2. テストでのprint使用（T201）
+
+```python
+# tests/test_debug.py
+def test_with_debug():
+    result = complex_calculation()
+    print(f"Debug: result = {result}")  # T201だが、デバッグ時は有用
+    assert result > 0
+```
+
+## 10. 自動修正とフォーマット
+
+### 10.1. 自動修正可能なエラー
+
+```bash
+# 自動修正実行
+ruff check . --fix
+
+# フォーマット実行
+ruff format .
+
+# 特定のルールのみチェック
+ruff check . --select=I  # インポート順序のみ
+```
+
+### 10.2. 段階的な導入
+
+```toml
+# 段階1: 基本的なエラーのみ
+[tool.ruff]
+select = ["E", "F"]
+
+# 段階2: インポートとスタイル追加
+[tool.ruff]
+select = ["E", "F", "I", "W"]
+
+# 段階3: 全ルール適用
+[tool.ruff]
+select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM", "TCH"]
+```
+
+## 11. CI/CDでの活用
+
+### 11.1. GitHub Actionsでの設定
+
+```yaml
+name: Code Quality
+
+on: [push, pull_request]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          pip install ruff
+      - name: Run Ruff
+        run: |
+          ruff check .
+          ruff format --check .
+```
+
+### 11.2. pre-commitでの設定
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.3.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+```
+
+## 12. 実践的なチェックリスト
+
+### 12.1. コード作成時のチェックポイント
+
+- [ ] インポートを標準ライブラリ → サードパーティ → ファーストパーティの順で配置
+- [ ] 未使用のインポートを削除
+- [ ] Python 3.12+ の新しい型アノテーション（`|`、組み込み型）を使用
+- [ ] f-stringを使用（.format()や%フォーマットを避ける）
+- [ ] 可変デフォルト引数を避ける
+- [ ] 適切な命名規則（snake_case、PascalCase）を使用
+- [ ] 行の長さを100文字以内に制限
+- [ ] ファイル末尾に改行を追加
+
+### 12.2. コードレビュー時のチェックポイント
+
+- [ ] 不要なif文やループがないか
+- [ ] 辞書アクセスでget()メソッドを適切に使用
+- [ ] 例外処理で具体的な例外を指定
+- [ ] TYPE_CHECKINGブロックの適切な使用
+- [ ] リスト内包表記の活用
+- [ ] 定数の適切な命名（UPPER_CASE）
+
+### 12.3. プロジェクト設定時のチェックポイント
+
+- [ ] pyproject.tomlでのRuff設定
+- [ ] ファイル別の例外設定（per-file-ignores）
+- [ ] CI/CDでのRuffチェック設定
+- [ ] pre-commitフックの設定
+- [ ] チーム内でのコーディング規約の共有
+
+## 13. よくあるエラーパターンと対策
+
+### 13.1. FastAPI + SQLAlchemy特有のパターン
+
+```python
+# ✅ 適切なFastAPIエンドポイント
+from collections.abc import Generator
+from fastapi import Depends, FastAPI, HTTPException, status
+from sqlalchemy.orm import Session
+
+from .database import get_db
+from .models import User
+from .schemas import UserCreate, UserResponse
+
+app = FastAPI()
+
+@app.post("/users/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def create_user(
+    user_data: UserCreate,
+    db: Session = Depends(get_db)
+) -> UserResponse:
+    # 実装
+    return UserResponse.from_orm(user)
+```
+
+### 13.2. 設定ファイルでの適切なパターン
+
+```python
+# ✅ 適切な設定クラス
+from functools import lru_cache
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True
+    )
+    
+    app_name: str = "News Assistant"
+    debug: bool = Field(default=False)
+    database_url: str = Field(alias="DATABASE_URL")
+
+@lru_cache()
+def get_settings() -> Settings:
+    return Settings()
+```
+
+## 14. まとめ
+
+このガイドラインに従うことで、Ruffでのリンティングエラーを大幅に削減できます：
+
+1. **事前の設定**: pyproject.tomlでの適切なRuff設定
+2. **段階的導入**: 既存プロジェクトに段階的にルールを適用
+3. **自動修正活用**: `--fix`オプションでの自動修正
+4. **継続的チェック**: CI/CDとpre-commitでの自動チェック
+5. **チーム共有**: コーディング規約のチーム内共有
+
+Ruffは高速で包括的なツールです。適切な設定と段階的な導入により、コード品質を大幅に向上させることができます。
