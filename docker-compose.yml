@@ -1,17 +1,6 @@
+# 開発環境用 Docker Compose 設定
 services:
-  app:
-    build: .
-    container_name: news-assistant-prod
-    ports:
-      - "8000:8000"
-    volumes:
-      - data:/app/data
-    environment:
-      - NEWS_ASSISTANT_DB_URL=sqlite:///./data/news.db
-      - PYTHONPATH=/app
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-    restart: unless-stopped
-
+  # 開発環境用アプリケーション
   app-dev:
     build: .
     container_name: news-assistant-dev
@@ -27,8 +16,10 @@ services:
       - NEWS_ASSISTANT_DB_URL=sqlite:///./data/news.db
       - PYTHONPATH=/app
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ENVIRONMENT=development
     restart: unless-stopped
 
+  # テスト実行用
   test:
     build: .
     command: sh -c "PYTHONPATH=/app pytest"
@@ -43,7 +34,9 @@ services:
     environment:
       - NEWS_ASSISTANT_DB_URL=sqlite:///./data/news.db
       - PYTHONPATH=/app
+      - ENVIRONMENT=testing
 
+  # Poetry管理用
   poetry:
     build: .
     container_name: news-assistant-poetry
@@ -60,5 +53,7 @@ services:
       - ./alembic.ini:/app/alembic.ini
     environment:
       - NEWS_ASSISTANT_DB_URL=sqlite:///./data/news.db
+      - ENVIRONMENT=development
+
 volumes:
   data: 

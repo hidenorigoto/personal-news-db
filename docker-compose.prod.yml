@@ -1,0 +1,44 @@
+# 本番環境用 Docker Compose 設定
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: news-assistant-prod
+    ports:
+      - "8000:8000"
+    volumes:
+      - data:/app/data
+    environment:
+      - NEWS_ASSISTANT_DB_URL=sqlite:///./data/news.db
+      - PYTHONPATH=/app
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ENVIRONMENT=production
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # データベース初期化用の一時サービス
+  db-init:
+    build: .
+    container_name: news-assistant-db-init
+    volumes:
+      - data:/app/data
+      - ./scripts:/app/scripts
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
+    environment:
+      - NEWS_ASSISTANT_DB_URL=sqlite:///./data/news.db
+      - PYTHONPATH=/app
+      - ENVIRONMENT=production
+    command: python scripts/init_with_alembic.py
+    profiles:
+      - init
+
+volumes:
+  data:
+    driver: local 
