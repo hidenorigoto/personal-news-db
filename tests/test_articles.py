@@ -1,42 +1,7 @@
 """記事モジュールのテスト"""
-from collections.abc import Generator
 from unittest.mock import patch
 
-import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-
-from news_assistant.core import Base, get_db
-from news_assistant.main import app
-
-# テスト用データベース設定
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test_articles.db"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-def override_get_db() -> Generator[Session, None, None]:
-    """テスト用データベースセッション"""
-    try:
-        db = TestingSessionLocal()
-        yield db
-    finally:
-        db.close()
-
-
-app.dependency_overrides[get_db] = override_get_db
-
-client = TestClient(app)
-
-
-@pytest.fixture(autouse=True)
-def setup_database() -> Generator[None, None, None]:
-    """各テスト前にデータベースをリセット"""
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-    yield
-    Base.metadata.drop_all(bind=engine)
 
 
 def test_create_article(client: TestClient) -> None:

@@ -2,6 +2,9 @@
 from fastapi import FastAPI
 
 from .articles import router as articles_router
+
+# モデルを明示的にインポートしてテーブル作成を確実にする
+from .articles.models import Article  # noqa: F401
 from .core import create_tables, settings
 from .health import router as health_router
 
