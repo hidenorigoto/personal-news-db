@@ -437,21 +437,52 @@ API応答なし
 
 ### pyproject.toml変更後の必須ステップ
 
-```bash
-# Step 1: 全コンテナのリビルド（キャッシュなし）
-docker compose build --no-cache
+**重要**: pyproject.tomlを変更した場合は、以下の手順を必ず実行してください。
 
-# Step 2: 既存コンテナの停止・削除
+```bash
+# Step 1: 既存コンテナの停止・削除
 docker compose down
+
+# Step 2: 全コンテナのリビルド（キャッシュなし）
+docker compose build --no-cache
 
 # Step 3: 新しいコンテナで起動
 docker compose up -d
 
 # Step 4: 依存関係の確認
-docker compose run --rm test python -c "import pydantic_settings; print('Dependencies OK')"
+docker compose run --rm poetry poetry show  # 依存関係確認
+docker compose run --rm poetry poetry run mypy --version  # ツール確認
 
 # Step 5: テスト実行で動作確認
 docker compose run --rm test pytest tests/test_new_structure.py -v
+```
+
+### MyPy設定変更時の追加手順
+
+MyPyの設定（strict、exclude、overrides等）を変更した場合は、追加でキャッシュクリアが必要：
+
+```bash
+# MyPyキャッシュクリア
+docker compose run --rm poetry rm -rf .mypy_cache
+
+# 設定確認
+docker compose run --rm poetry poetry run mypy --show-config
+
+# 全体テスト実行
+make all
+```
+
+### Ruff設定変更時の確認手順
+
+```bash
+# Ruff設定確認
+docker compose run --rm poetry poetry run ruff check --show-settings
+
+# 自動修正実行
+docker compose run --rm poetry poetry run ruff . --fix
+
+# フォーマット実行
+docker compose run --rm poetry poetry run ruff format .
 ```
 
 ## 定期メンテナンス手順
