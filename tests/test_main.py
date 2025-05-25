@@ -11,13 +11,16 @@ def test_create_article(client: TestClient, monkeypatch: Any) -> None:
         def __init__(self) -> None:
             self.content = b"<html>test</html>"
             self.headers = {"Content-Type": "text/html"}
+
         def raise_for_status(self) -> None:
             pass
+
     monkeypatch.setattr("requests.get", lambda url, timeout=10: MockResponse())
 
     # openai要約APIをモック
     def mock_summary(content: str) -> str:
         return "これは要約です。"
+
     monkeypatch.setattr("news_assistant.content.processor.generate_summary", mock_summary)
 
     data = {"url": "http://example.com/unique-test-1", "title": "Example"}
@@ -38,12 +41,15 @@ def test_create_article_html_title(client: TestClient, monkeypatch: Any) -> None
     html = b"""
     <html><head><title>AutoTitle</title></head><body>test</body></html>
     """
+
     class MockResponse:
         def __init__(self) -> None:
             self.content = html
             self.headers = {"Content-Type": "text/html"}
+
         def raise_for_status(self) -> None:
             pass
+
     monkeypatch.setattr("requests.get", lambda url, timeout=10: MockResponse())
 
     data = {"url": "http://example.com/auto-title-html", "title": "ShouldNotUseThis"}
@@ -58,18 +64,22 @@ def test_create_article_pdf_title(client: TestClient, monkeypatch: Any) -> None:
     import io
 
     from pypdf import PdfWriter
+
     pdf_io = io.BytesIO()
     writer = PdfWriter()
     writer.add_blank_page(width=72, height=72)
     writer.add_metadata({"/Title": "PDF Auto Title"})
     writer.write(pdf_io)
     pdf_bytes = pdf_io.getvalue()
+
     class MockResponse:
         def __init__(self) -> None:
             self.content = pdf_bytes
             self.headers = {"Content-Type": "application/pdf"}
+
         def raise_for_status(self) -> None:
             pass
+
     monkeypatch.setattr("requests.get", lambda url, timeout=10: MockResponse())
 
     data = {
@@ -88,8 +98,10 @@ def test_create_article_fallback_title(client: TestClient, monkeypatch: Any) -> 
         def __init__(self) -> None:
             self.content = b"no title here"
             self.headers = {"Content-Type": "text/plain"}
+
         def raise_for_status(self) -> None:
             pass
+
     monkeypatch.setattr("requests.get", lambda url, timeout=10: MockResponse())
 
     data = {"url": "http://example.com/notitle-fallback", "title": "FallbackTitle"}
@@ -113,8 +125,10 @@ def test_get_article(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> Non
         def __init__(self) -> None:
             self.content = b"<html>get article</html>"
             self.headers = {"Content-Type": "text/html"}
+
         def raise_for_status(self) -> None:
             pass
+
     monkeypatch.setattr("requests.get", lambda url, timeout=10: MockResponse())
     # まず記事を1件登録（ユニークなURLを生成）
     unique_url = f"http://example.com/get-article-{uuid.uuid4()}"

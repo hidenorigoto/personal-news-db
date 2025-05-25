@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from news_assistant.core import settings
 
 
-def test_root_endpoint(client: TestClient):
+def test_root_endpoint(client: TestClient) -> None:
     """ルートエンドポイントのテスト"""
     response = client.get("/")
     assert response.status_code == 200
@@ -17,7 +17,7 @@ def test_root_endpoint(client: TestClient):
     assert isinstance(data["debug"], bool)
 
 
-def test_health_endpoint(client: TestClient):
+def test_health_endpoint(client: TestClient) -> None:
     """ヘルスチェックエンドポイントのテスト"""
     response = client.get("/health")
     assert response.status_code == 200
@@ -31,8 +31,11 @@ def test_health_endpoint(client: TestClient):
     assert "database" in data
     assert data["debug_mode"] == settings.debug
 
+    # データベース状態確認
+    assert data["database"] in ["healthy", "error"]
 
-def test_core_config_import():
+
+def test_core_config_import() -> None:
     """コア設定モジュールのインポートテスト"""
     from news_assistant.core import get_settings, settings
 
@@ -45,7 +48,7 @@ def test_core_config_import():
     assert settings is settings2
 
 
-def test_core_database_import():
+def test_core_database_import() -> None:
     """コアデータベースモジュールのインポートテスト"""
     from news_assistant.core import Base, engine, get_db
 
@@ -55,7 +58,7 @@ def test_core_database_import():
     assert engine is not None
 
 
-def test_core_exceptions_import():
+def test_core_exceptions_import() -> None:
     """コア例外モジュールのインポートテスト"""
     from news_assistant.core import (
         ArticleNotFoundError,
@@ -80,17 +83,17 @@ def test_core_exceptions_import():
     assert article_error.details["article_id"] == 123
 
 
-def test_health_module_import():
+def test_health_module_import() -> None:
     """ヘルスチェックモジュールのインポートテスト"""
     from news_assistant.health import router
 
     assert router is not None
     # ルーターにヘルスチェックエンドポイントが含まれていることを確認
-    routes = [route.path for route in router.routes if hasattr(route, 'path')]
+    routes = [route.path for route in router.routes if hasattr(route, "path")]
     assert "/health" in routes
 
 
-def test_app_configuration(client: TestClient):
+def test_app_configuration(client: TestClient) -> None:
     """FastAPIアプリケーションの設定テスト"""
     from news_assistant.main import app
 
@@ -99,6 +102,6 @@ def test_app_configuration(client: TestClient):
     assert app.debug == settings.debug
 
     # ルートが正しく登録されていることを確認
-    routes = [route.path for route in app.routes if hasattr(route, 'path')]
+    routes = [route.path for route in app.routes if hasattr(route, "path")]
     assert "/" in routes
     assert "/health" in routes

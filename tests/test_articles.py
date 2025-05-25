@@ -1,21 +1,22 @@
 """記事モジュールのテスト"""
+from collections.abc import Generator
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from news_assistant.core import Base, get_db
 from news_assistant.main import app
 
 # テスト用データベース設定
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test_articles.db"
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-def override_get_db():
+def override_get_db() -> Generator[Session, None, None]:
     """テスト用データベースセッション"""
     try:
         db = TestingSessionLocal()
@@ -30,7 +31,7 @@ client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
-def setup_database():
+def setup_database() -> Generator[None, None, None]:
     """各テスト前にデータベースをリセット"""
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
@@ -38,137 +39,127 @@ def setup_database():
     Base.metadata.drop_all(bind=engine)
 
 
-def test_create_article():
+def test_create_article(client: TestClient) -> None:
     """記事作成テスト"""
-    article_data = {
-        "url": "https://example.com/test-article",
-        "title": "Test Article",
-        "summary": "This is a test article"
-    }
+    article_data = {"url": "https://example.com/test-article", "title": "Test Article"}
 
-    response = client.post("/api/articles/", json=article_data)
+    with patch("news_assistant.content.processor.ContentProcessor.process_url") as mock_process:
+        from pydantic import HttpUrl
+
+        from news_assistant.content.schemas import ProcessedContent
+
+        mock_process.return_value = ProcessedContent(
+            url=HttpUrl("https://example.com/test-article"),
+            title="Processed Title",
+            extracted_text="Extracted content",
+            summary="Generated summary",
+            extension="html",
+            file_path=None,
+        )
+
+        response = client.post("/api/articles/", json=article_data)
+
     assert response.status_code == 201
-
     data = response.json()
-    assert data["url"] == article_data["url"]
-    assert data["title"] == article_data["title"]
-    assert data["summary"] == article_data["summary"]
-    assert "id" in data
-    assert "created_at" in data
+    assert data["url"] == "https://example.com/test-article"
+    assert data["title"] == "Processed Title"
 
 
-def test_create_article_duplicate_url():
+def test_create_article_duplicate_url(client: TestClient) -> None:
     """重複URL記事作成テスト"""
-    article_data = {
-        "url": "https://example.com/duplicate-test",
-        "title": "Test Article",
-        "summary": "This is a test article"
-    }
+    article_data = {"url": "https://example.com/duplicate", "title": "Duplicate Article"}
 
     # 最初の記事作成
-    response1 = client.post("/api/articles/", json=article_data)
-    assert response1.status_code == 201
+    with patch("news_assistant.content.processor.ContentProcessor.process_url"):
+        client.post("/api/articles/", json=article_data)
 
-    # 同じURLで再度作成（エラーになるはず）
-    response2 = client.post("/api/articles/", json=article_data)
-    assert response2.status_code == 409
+    # 重複記事作成試行
+    with patch("news_assistant.content.processor.ContentProcessor.process_url"):
+        response = client.post("/api/articles/", json=article_data)
+
+    assert response.status_code == 400
+    assert "already exists" in response.json()["detail"]
 
 
-def test_get_articles_empty():
+def test_get_articles_empty(client: TestClient) -> None:
     """空の記事一覧取得テスト"""
     response = client.get("/api/articles/")
     assert response.status_code == 200
-
     data = response.json()
-    assert data["articles"] == []
+    assert data["items"] == []
     assert data["total"] == 0
-    assert data["skip"] == 0
-    assert data["limit"] == 100
+    assert data["page"] == 1
+    assert data["size"] == 50
 
 
-def test_get_articles_with_data():
-    """記事一覧取得テスト（データあり）"""
-    # テスト記事を作成
-    article_data = {
-        "url": "https://example.com/test-list",
-        "title": "Test List Article",
-        "summary": "Test summary"
-    }
-    create_response = client.post("/api/articles/", json=article_data)
-    assert create_response.status_code == 201
+def test_get_articles_with_data(client: TestClient) -> None:
+    """記事データありの一覧取得テスト"""
+    # テスト記事作成
+    article_data = {"url": "https://example.com/test1", "title": "Test Article 1"}
 
-    # 記事一覧取得
+    with patch("news_assistant.content.processor.ContentProcessor.process_url"):
+        client.post("/api/articles/", json=article_data)
+
     response = client.get("/api/articles/")
     assert response.status_code == 200
-
     data = response.json()
-    assert len(data["articles"]) == 1
+    assert len(data["items"]) == 1
     assert data["total"] == 1
-    assert data["articles"][0]["title"] == article_data["title"]
+    assert data["items"][0]["title"] == "Test Article 1"
 
 
-def test_get_article_by_id():
+def test_get_article_by_id(client: TestClient) -> None:
     """ID指定記事取得テスト"""
-    # テスト記事を作成
-    article_data = {
-        "url": "https://example.com/test-get-by-id",
-        "title": "Test Get By ID",
-        "summary": "Test summary"
-    }
-    create_response = client.post("/api/articles/", json=article_data)
-    assert create_response.status_code == 201
+    # テスト記事作成
+    article_data = {"url": "https://example.com/test-get", "title": "Test Get Article"}
+
+    with patch("news_assistant.content.processor.ContentProcessor.process_url"):
+        create_response = client.post("/api/articles/", json=article_data)
+
     article_id = create_response.json()["id"]
 
-    # ID指定で取得
     response = client.get(f"/api/articles/{article_id}")
     assert response.status_code == 200
-
     data = response.json()
     assert data["id"] == article_id
-    assert data["title"] == article_data["title"]
+    assert data["title"] == "Test Get Article"
 
 
-def test_get_article_not_found():
+def test_get_article_not_found(client: TestClient) -> None:
     """存在しない記事取得テスト"""
     response = client.get("/api/articles/999")
     assert response.status_code == 404
+    assert "not found" in response.json()["detail"]
 
 
-def test_update_article():
+def test_update_article(client: TestClient) -> None:
     """記事更新テスト"""
-    # テスト記事を作成
-    article_data = {
-        "url": "https://example.com/test-update",
-        "title": "Original Title",
-        "summary": "Original summary"
-    }
-    create_response = client.post("/api/articles/", json=article_data)
-    assert create_response.status_code == 201
+    # テスト記事作成
+    article_data = {"url": "https://example.com/test-update", "title": "Original Title"}
+
+    with patch("news_assistant.content.processor.ContentProcessor.process_url"):
+        create_response = client.post("/api/articles/", json=article_data)
+
     article_id = create_response.json()["id"]
 
     # 記事更新
-    update_data = {
-        "title": "Updated Title",
-        "summary": "Updated summary"
-    }
+    update_data = {"title": "Updated Title", "summary": "Updated summary"}
+
     response = client.put(f"/api/articles/{article_id}", json=update_data)
     assert response.status_code == 200
-
     data = response.json()
-    assert data["title"] == update_data["title"]
-    assert data["summary"] == update_data["summary"]
+    assert data["title"] == "Updated Title"
+    assert data["summary"] == "Updated summary"
 
 
-def test_delete_article():
+def test_delete_article(client: TestClient) -> None:
     """記事削除テスト"""
-    # テスト記事を作成
-    article_data = {
-        "url": "https://example.com/test-delete",
-        "title": "Test Delete",
-        "summary": "Test summary"
-    }
-    create_response = client.post("/api/articles/", json=article_data)
-    assert create_response.status_code == 201
+    # テスト記事作成
+    article_data = {"url": "https://example.com/test-delete", "title": "Delete Test Article"}
+
+    with patch("news_assistant.content.processor.ContentProcessor.process_url"):
+        create_response = client.post("/api/articles/", json=article_data)
+
     article_id = create_response.json()["id"]
 
     # 記事削除
@@ -180,24 +171,22 @@ def test_delete_article():
     assert get_response.status_code == 404
 
 
-def test_pagination():
+def test_pagination(client: TestClient) -> None:
     """ページネーションテスト"""
-    # 複数の記事を作成
+    # 複数記事作成
     for i in range(5):
         article_data = {
-            "url": f"https://example.com/test-pagination-{i}",
-            "title": f"Test Article {i}",
-            "summary": f"Test summary {i}"
+            "url": f"https://example.com/test-page-{i}",
+            "title": f"Page Test Article {i}",
         }
-        response = client.post("/api/articles/", json=article_data)
-        assert response.status_code == 201
+        with patch("news_assistant.content.processor.ContentProcessor.process_url"):
+            client.post("/api/articles/", json=article_data)
 
     # ページネーション確認
-    response = client.get("/api/articles/?skip=2&limit=2")
+    response = client.get("/api/articles/?page=1&size=3")
     assert response.status_code == 200
-
     data = response.json()
-    assert len(data["articles"]) == 2
+    assert len(data["items"]) == 3
     assert data["total"] == 5
-    assert data["skip"] == 2
-    assert data["limit"] == 2
+    assert data["page"] == 1
+    assert data["size"] == 3

@@ -1,10 +1,11 @@
 """テスト設定とフィクスチャ"""
 import os
+from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from news_assistant.core.database import Base, get_db
 from news_assistant.main import app
@@ -12,15 +13,16 @@ from news_assistant.main import app
 # 環境変数からDB URLを取得（デフォルトはインメモリ）
 SQLALCHEMY_DATABASE_URL = os.getenv("NEWS_ASSISTANT_DB_URL", "sqlite:///:memory:")
 
+# テスト用エンジンとセッション
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False}
+    connect_args={"check_same_thread": False} if "sqlite" in SQLALCHEMY_DATABASE_URL else {},
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-def override_get_db():
-    """テスト用データベースセッション"""
+def override_get_db() -> Generator[Session, None, None]:
+    """テスト用データベースセッション取得"""
     try:
         db = TestingSessionLocal()
         yield db
@@ -28,8 +30,8 @@ def override_get_db():
         db.close()
 
 
-@pytest.fixture(scope="function")
-def db_session():
+@pytest.fixture
+def db_session() -> Generator[Session, None, None]:
     """テスト用データベースセッションフィクスチャ"""
     # テーブル作成
     Base.metadata.create_all(bind=engine)
@@ -43,8 +45,8 @@ def db_session():
         Base.metadata.drop_all(bind=engine)
 
 
-@pytest.fixture(scope="function")
-def client(db_session):
+@pytest.fixture
+def client(db_session: Session) -> Generator[TestClient, None, None]:
     """テスト用クライアントフィクスチャ"""
     # データベース依存関係をオーバーライド
     app.dependency_overrides[get_db] = override_get_db

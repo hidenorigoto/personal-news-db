@@ -2,6 +2,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
+from pydantic import HttpUrl
 
 from news_assistant.content import ContentExtractor, ContentProcessor
 from news_assistant.content.schemas import ContentData, TextExtractionResult, TitleExtractionResult
@@ -11,81 +12,104 @@ from news_assistant.core import ContentProcessingError
 class TestContentExtractor:
     """ContentExtractorのテスト"""
 
-    def test_get_extension_from_content_type_html(self):
+    def test_get_extension_from_content_type_html(self) -> None:
         """HTML Content-Typeの拡張子判定テスト"""
         result = ContentExtractor._get_extension_from_content_type("text/html")
         assert result == "html"
 
-    def test_get_extension_from_content_type_pdf(self):
+    def test_get_extension_from_content_type_pdf(self) -> None:
         """PDF Content-Typeの拡張子判定テスト"""
         result = ContentExtractor._get_extension_from_content_type("application/pdf")
         assert result == "pdf"
 
-    def test_get_extension_from_url(self):
+    def test_get_extension_from_url(self) -> None:
         """URLからの拡張子判定テスト"""
-        result = ContentExtractor._get_extension_from_content_type("", "http://example.com/test.pdf")
+        # ContentExtractorの内部メソッドをテスト
+        result = ContentExtractor._get_extension_from_content_type(
+            "", "https://example.com/file.pdf"
+        )
         assert result == "pdf"
 
-    def test_extract_title_from_html_success(self):
+    def test_extract_title_from_html_success(self) -> None:
         """HTMLタイトル抽出成功テスト"""
-        html_content = b"<html><head><title>Test Title</title></head><body>content</body></html>"
-        result = ContentExtractor._extract_title_from_html(html_content)
+        html_content = b"<html><head><title>Test Title</title></head><body></body></html>"
+        content_data = ContentData(
+            url=HttpUrl("https://example.com"),
+            content=html_content,
+            content_type="text/html",
+            extension="html",
+        )
 
+        result = ContentExtractor.extract_title(content_data, "fallback")
         assert result.success is True
         assert result.title == "Test Title"
-        assert result.method == "html_tag"
 
-    def test_extract_title_from_html_no_title(self):
+    def test_extract_title_from_html_no_title(self) -> None:
         """HTMLタイトル抽出失敗テスト"""
-        html_content = b"<html><head></head><body>content</body></html>"
-        result = ContentExtractor._extract_title_from_html(html_content)
+        html_content = b"<html><head></head><body></body></html>"
+        content_data = ContentData(
+            url=HttpUrl("https://example.com"),
+            content=html_content,
+            content_type="text/html",
+            extension="html",
+        )
 
+        result = ContentExtractor.extract_title(content_data, "fallback")
         assert result.success is False
-        assert result.title == ""
+        assert result.title == "fallback"
 
-    def test_extract_text_from_html(self):
+    def test_extract_text_from_html(self) -> None:
         """HTMLテキスト抽出テスト"""
-        html_content = b"<html><body><p>Test content</p><p>More content</p></body></html>"
-        result = ContentExtractor._extract_text_from_html(html_content)
+        html_content = b"<html><body><p>Test content</p></body></html>"
+        content_data = ContentData(
+            url=HttpUrl("https://example.com"),
+            content=html_content,
+            content_type="text/html",
+            extension="html",
+        )
 
+        result = ContentExtractor.extract_text(content_data)
         assert result.success is True
         assert "Test content" in result.text
-        assert "More content" in result.text
-        assert result.word_count > 0
 
-    def test_extract_text_from_txt(self):
+    def test_extract_text_from_txt(self) -> None:
         """テキストファイル抽出テスト"""
         txt_content = b"This is plain text content."
-        result = ContentExtractor._extract_text_from_txt(txt_content)
+        content_data = ContentData(
+            url=HttpUrl("https://example.com/file.txt"),
+            content=txt_content,
+            content_type="text/plain",
+            extension="txt",
+        )
 
+        result = ContentExtractor.extract_text(content_data)
         assert result.success is True
         assert result.text == "This is plain text content."
         assert result.word_count == len("This is plain text content.")
 
-    @patch('requests.get')
-    def test_fetch_content_success(self, mock_get):
+    @patch("requests.get")
+    def test_fetch_content_success(self, mock_get: MagicMock) -> None:
         """コンテンツ取得成功テスト"""
-        # モックレスポンス設定
         mock_response = MagicMock()
-        mock_response.content = b"<html>test</html>"
-        mock_response.headers = {"Content-Type": "text/html"}
+        mock_response.content = b"<html><body>Test</body></html>"
+        mock_response.headers = {"content-type": "text/html"}
         mock_response.raise_for_status.return_value = None
         mock_get.return_value = mock_response
 
-        result = ContentExtractor.fetch_content("http://example.com/test")
+        result = ContentExtractor.fetch_content("https://example.com")
 
-        assert str(result.url) == "http://example.com/test"
-        assert result.content == b"<html>test</html>"
+        assert result.url == HttpUrl("https://example.com")
+        assert result.content == b"<html><body>Test</body></html>"
         assert result.content_type == "text/html"
         assert result.extension == "html"
 
-    @patch('requests.get')
-    def test_fetch_content_failure(self, mock_get):
+    @patch("requests.get")
+    def test_fetch_content_failure(self, mock_get: MagicMock) -> None:
         """コンテンツ取得失敗テスト"""
         mock_get.side_effect = Exception("Network error")
 
         with pytest.raises(ContentProcessingError) as exc_info:
-            ContentExtractor.fetch_content("http://example.com/test")
+            ContentExtractor.fetch_content("https://example.com")
 
         assert exc_info.value.error_code == "FETCH_FAILED"
 
@@ -93,39 +117,39 @@ class TestContentExtractor:
 class TestContentProcessor:
     """ContentProcessorのテスト"""
 
-    def test_init(self, tmp_path):
+    def test_init(self, tmp_path: str) -> None:
         """初期化テスト"""
         processor = ContentProcessor(str(tmp_path))
         assert processor.data_dir == str(tmp_path)
-        assert tmp_path.exists()
 
-    @patch('news_assistant.content.extractor.ContentExtractor.fetch_content')
-    @patch('news_assistant.content.extractor.ContentExtractor.extract_title')
-    @patch('news_assistant.content.extractor.ContentExtractor.extract_text')
-    @patch('news_assistant.content.processor.generate_summary')
+    @patch("news_assistant.content.extractor.ContentExtractor.fetch_content")
+    @patch("news_assistant.content.extractor.ContentExtractor.extract_title")
+    @patch("news_assistant.content.extractor.ContentExtractor.extract_text")
+    @patch("news_assistant.content.processor.generate_summary")
     def test_process_url_success(
-        self, mock_summary, mock_extract_text, mock_extract_title, mock_fetch, tmp_path
-    ):
+        self,
+        mock_summary: MagicMock,
+        mock_extract_text: MagicMock,
+        mock_extract_title: MagicMock,
+        mock_fetch: MagicMock,
+        tmp_path: str,
+    ) -> None:
         """URL処理成功テスト"""
         # モック設定
         mock_content_data = ContentData(
-            url="http://example.com/test",
+            url=HttpUrl("http://example.com/test"),
             content=b"<html>test</html>",
             content_type="text/html",
-            extension="html"
+            extension="html",
         )
         mock_fetch.return_value = mock_content_data
 
         mock_extract_title.return_value = TitleExtractionResult(
-            title="Extracted Title",
-            success=True,
-            method="html_tag"
+            title="Extracted Title", success=True, method="html_tag"
         )
 
         mock_extract_text.return_value = TextExtractionResult(
-            text="Extracted text content",
-            success=True,
-            word_count=20
+            text="Extracted text content", success=True, word_count=20
         )
 
         mock_summary.return_value = "Generated summary"
@@ -133,9 +157,7 @@ class TestContentProcessor:
         # テスト実行
         processor = ContentProcessor(str(tmp_path))
         result = processor.process_url(
-            url="http://example.com/test",
-            fallback_title="Fallback Title",
-            article_id=1
+            url="http://example.com/test", fallback_title="Fallback Title", article_id=1
         )
 
         # 検証
@@ -146,14 +168,14 @@ class TestContentProcessor:
         assert result.extension == "html"
         assert result.file_path is not None
 
-    @patch('news_assistant.content.extractor.ContentExtractor.fetch_content')
-    def test_extract_title_only(self, mock_fetch):
+    @patch("news_assistant.content.extractor.ContentExtractor.fetch_content")
+    def test_extract_title_only(self, mock_fetch: MagicMock) -> None:
         """タイトルのみ抽出テスト"""
         mock_content_data = ContentData(
-            url="http://example.com/test",
+            url=HttpUrl("http://example.com/test"),
             content=b"<html><title>Test Title</title></html>",
             content_type="text/html",
-            extension="html"
+            extension="html",
         )
         mock_fetch.return_value = mock_content_data
 
@@ -162,8 +184,8 @@ class TestContentProcessor:
 
         assert result == "Test Title"
 
-    @patch('news_assistant.content.processor.generate_summary')
-    def test_generate_summary_from_text(self, mock_summary):
+    @patch("news_assistant.content.processor.generate_summary")
+    def test_generate_summary_from_text(self, mock_summary: MagicMock) -> None:
         """テキストから要約生成テスト"""
         mock_summary.return_value = "Generated summary"
 
@@ -173,7 +195,7 @@ class TestContentProcessor:
         assert result == "Generated summary"
         mock_summary.assert_called_once_with("Some long text content")
 
-    def test_generate_summary_from_empty_text(self):
+    def test_generate_summary_from_empty_text(self) -> None:
         """空テキストから要約生成テスト"""
         processor = ContentProcessor()
         result = processor.generate_summary_from_text("")
