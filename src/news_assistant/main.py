@@ -1,6 +1,8 @@
 """News Assistant API - メインアプリケーション（新構造版）"""
 import os
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from .articles import router as articles_router
@@ -12,11 +14,11 @@ from .health import router as health_router
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # アプリケーション開始時
     if os.getenv('APP_ENV') != 'production':
         create_tables()
-    
+
     yield
 
 

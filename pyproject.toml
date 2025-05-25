@@ -45,6 +45,9 @@ select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM", "TCH"]
 extend-ignore = ["B008", "E501"]
 src = ["src"]
 
+[tool.ruff.lint.per-file-ignores]
+"tests/conftest.py" = ["E402"]
+
 [tool.mypy]
 python_version = "3.12"
 strict = true

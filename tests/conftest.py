@@ -1,18 +1,18 @@
 """テスト設定とフィクスチャ"""
+# アプリケーションのインポート前に環境変数を設定
+import os
+from collections.abc import Generator
+
+os.environ["NEWS_ASSISTANT_DB_URL"] = "sqlite:///:memory:"
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-# アプリケーションのインポート前に環境変数を設定
-import os
-os.environ["NEWS_ASSISTANT_DB_URL"] = "sqlite:///:memory:"
-
+from news_assistant.core.database import Base, get_db
 from news_assistant.main import app
-from news_assistant.core.database import get_db, Base
-from news_assistant.articles.models import Article  # モデルを明示的にインポート
-
 
 # テスト用のin-memoryデータベース設定
 TEST_DATABASE_URL = "sqlite:///:memory:"
@@ -27,7 +27,7 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 
 
 @pytest.fixture(scope="session", autouse=True)
-def setup_test_database():
+def setup_test_database() -> Generator[None, None, None]:
     """テストセッション開始時にテーブルを作成"""
     Base.metadata.create_all(bind=engine)
     yield
@@ -35,28 +35,28 @@ def setup_test_database():
 
 
 @pytest.fixture
-def db_session():
+def db_session() -> Generator[Session, None, None]:
     """各テスト用のデータベースセッション"""
     connection = engine.connect()
     transaction = connection.begin()
     session = TestingSessionLocal(bind=connection)
-    
+
     yield session
-    
+
     session.close()
     transaction.rollback()
     connection.close()
 
 
 @pytest.fixture
-def client(db_session):
+def client(db_session: Session) -> Generator[TestClient, None, None]:
     """テスト用のFastAPIクライアント"""
-    def override_get_db():
+    def override_get_db() -> Generator[Session, None, None]:
         yield db_session
-    
+
     app.dependency_overrides[get_db] = override_get_db
-    
+
     with TestClient(app) as test_client:
         yield test_client
-    
+
     app.dependency_overrides.clear()
