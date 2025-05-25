@@ -1,13 +1,13 @@
 """テスト設定とフィクスチャ"""
 import os
+
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from fastapi.testclient import TestClient
 
 from news_assistant.core.database import Base, get_db
 from news_assistant.main import app
-
 
 # 環境変数からDB URLを取得（デフォルトはインメモリ）
 SQLALCHEMY_DATABASE_URL = os.getenv("NEWS_ASSISTANT_DB_URL", "sqlite:///:memory:")
@@ -33,7 +33,7 @@ def db_session():
     """テスト用データベースセッションフィクスチャ"""
     # テーブル作成
     Base.metadata.create_all(bind=engine)
-    
+
     db = TestingSessionLocal()
     try:
         yield db
@@ -48,9 +48,9 @@ def client(db_session):
     """テスト用クライアントフィクスチャ"""
     # データベース依存関係をオーバーライド
     app.dependency_overrides[get_db] = override_get_db
-    
+
     with TestClient(app) as test_client:
         yield test_client
-    
+
     # オーバーライドをクリア
-    app.dependency_overrides.clear() 
+    app.dependency_overrides.clear()

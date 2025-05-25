@@ -93,7 +93,7 @@ def test_health_module_import():
 def test_app_configuration(client: TestClient):
     """FastAPIアプリケーションの設定テスト"""
     from news_assistant.main import app
-    
+
     assert app.title == settings.app_name
     assert app.version == settings.version
     assert app.debug == settings.debug

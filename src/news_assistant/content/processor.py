@@ -3,9 +3,9 @@ import logging
 import os
 from datetime import datetime
 
-from ..core import ContentProcessingError
 from ..ai.exceptions import SummaryGenerationError
 from ..ai.summarizer import generate_summary
+from ..core import ContentProcessingError
 from .extractor import ContentExtractor
 from .schemas import ContentData, ProcessedContent
 
