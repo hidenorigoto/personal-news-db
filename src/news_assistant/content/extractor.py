@@ -24,6 +24,8 @@ class ContentExtractor:
             response.raise_for_status()
 
             content_type = response.headers.get("Content-Type", "")
+            # Content-Typeからパラメータ部分を除去してクリーンアップ
+            clean_content_type = content_type.split(";")[0].strip() if content_type else ""
             extension = ContentExtractor._get_extension_from_content_type(content_type, url)
 
             from pydantic import HttpUrl
@@ -31,7 +33,7 @@ class ContentExtractor:
             return ContentData(
                 url=HttpUrl(url),
                 content=response.content,
-                content_type=content_type,
+                content_type=clean_content_type,
                 extension=extension,
             )
         except Exception as e:
@@ -76,9 +78,19 @@ class ContentExtractor:
         """コンテンツからタイトルを抽出"""
         try:
             if content_data.extension == "html":
-                return ContentExtractor._extract_title_from_html(content_data.content)
+                result = ContentExtractor._extract_title_from_html(content_data.content)
+                if not result.success and fallback_title:
+                    return TitleExtractionResult(
+                        title=fallback_title, success=True, method="fallback"
+                    )
+                return result
             elif content_data.extension == "pdf":
-                return ContentExtractor._extract_title_from_pdf(content_data.content)
+                result = ContentExtractor._extract_title_from_pdf(content_data.content)
+                if not result.success and fallback_title:
+                    return TitleExtractionResult(
+                        title=fallback_title, success=True, method="fallback"
+                    )
+                return result
             else:
                 return TitleExtractionResult(
                     title=fallback_title, success=bool(fallback_title), method="fallback"

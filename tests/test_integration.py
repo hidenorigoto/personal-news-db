@@ -1,13 +1,12 @@
 import uuid
 from typing import Any
 
-import pytest
 from fastapi.testclient import TestClient
 
 
 def test_full_article_workflow_integration(client: TestClient, monkeypatch: Any) -> None:
     """記事の完全なワークフロー統合テスト
-    
+
     URL投稿 → コンテンツ取得 → タイトル抽出 → 要約生成 → 保存 → 取得の全フローをテスト
     """
     # requests.getをモック
@@ -30,30 +29,30 @@ def test_full_article_workflow_integration(client: TestClient, monkeypatch: Any)
     # 1. 記事作成（タイトル自動抽出）
     unique_url = f"http://example.com/integration-test-{uuid.uuid4()}"
     data = {"url": unique_url, "title": "ShouldBeOverridden"}
-    
+
     response = client.post("/api/articles/", json=data)
     assert response.status_code == 201
-    
+
     result = response.json()
     article_id = result["id"]
-    
+
     # タイトルが自動抽出されていることを確認
     assert result["title"] == "Integration Test Article"
     assert result["url"] == unique_url
     assert "統合テスト用の要約" in result["summary"]
-    
+
     # 2. 作成した記事を取得
     get_response = client.get(f"/api/articles/{article_id}")
     assert get_response.status_code == 200
-    
+
     get_result = get_response.json()
     assert get_result["id"] == article_id
     assert get_result["title"] == "Integration Test Article"
-    
+
     # 3. 記事一覧に含まれていることを確認
     list_response = client.get("/api/articles/")
     assert list_response.status_code == 200
-    
+
     list_result = list_response.json()
     article_found = any(article["id"] == article_id for article in list_result.get("articles", []))
     assert article_found, "作成した記事が一覧に含まれていません"
@@ -61,10 +60,10 @@ def test_full_article_workflow_integration(client: TestClient, monkeypatch: Any)
 
 def test_content_type_handling_integration(client: TestClient, monkeypatch: Any) -> None:
     """異なるコンテンツタイプの統合処理テスト
-    
+
     HTML、PDF、プレーンテキストの処理を統合的にテスト
     """
-    
+
     # HTMLコンテンツのテスト
     class MockHtmlResponse:
         def __init__(self) -> None:
@@ -76,6 +75,7 @@ def test_content_type_handling_integration(client: TestClient, monkeypatch: Any)
 
     # PDFコンテンツのテスト
     import io
+
     from pypdf import PdfWriter
 
     pdf_io = io.BytesIO()
@@ -109,14 +109,14 @@ def test_content_type_handling_integration(client: TestClient, monkeypatch: Any)
     ]
 
     for content_type, mock_class, expected_title in test_cases:
-        monkeypatch.setattr("requests.get", lambda url, timeout=10: mock_class())
-        
+        monkeypatch.setattr("requests.get", lambda url, timeout=10, cls=mock_class: cls())
+
         unique_url = f"http://example.com/content-{content_type}-{uuid.uuid4()}"
         data = {"url": unique_url, "title": "Fallback Title"}
-        
+
         response = client.post("/api/articles/", json=data)
         assert response.status_code == 201
-        
+
         result = response.json()
         assert result["title"] == expected_title
         assert result["url"] == unique_url
@@ -124,10 +124,10 @@ def test_content_type_handling_integration(client: TestClient, monkeypatch: Any)
 
 def test_error_handling_integration(client: TestClient, monkeypatch: Any) -> None:
     """エラーハンドリングの統合テスト
-    
+
     外部リクエスト失敗、重複URL、不正なデータなどのエラーケースを統合的にテスト
     """
-    
+
     # 1. 正常な記事を作成
     class MockResponse:
         def __init__(self) -> None:
@@ -138,21 +138,21 @@ def test_error_handling_integration(client: TestClient, monkeypatch: Any) -> Non
             pass
 
     monkeypatch.setattr("requests.get", lambda url, timeout=10: MockResponse())
-    
+
     duplicate_url = f"http://example.com/duplicate-{uuid.uuid4()}"
     data = {"url": duplicate_url, "title": "Original Article"}
-    
+
     response = client.post("/api/articles/", json=data)
     assert response.status_code == 201
-    
+
     # 2. 同じURLで重複作成を試行
     duplicate_response = client.post("/api/articles/", json=data)
     assert duplicate_response.status_code == 409  # Conflict
-    
+
     # 3. 存在しない記事の取得
     not_found_response = client.get("/api/articles/99999")
     assert not_found_response.status_code == 404
-    
+
     # 4. 不正なURLでの記事作成
     invalid_data = {"url": "not-a-valid-url", "title": "Invalid URL Test"}
     invalid_response = client.post("/api/articles/", json=invalid_data)
@@ -161,14 +161,14 @@ def test_error_handling_integration(client: TestClient, monkeypatch: Any) -> Non
 
 def test_api_health_and_basic_endpoints(client: TestClient) -> None:
     """API基本エンドポイントとヘルスチェックの統合テスト"""
-    
+
     # ルートエンドポイント
     root_response = client.get("/")
     assert root_response.status_code == 200
     root_data = root_response.json()
     assert "message" in root_data
     assert "News Assistant" in root_data["message"]
-    
+
     # ヘルスチェック
     health_response = client.get("/health")
     assert health_response.status_code == 200

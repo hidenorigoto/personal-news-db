@@ -55,8 +55,9 @@ class TestContentExtractor:
         )
 
         result = ContentExtractor.extract_title(content_data, "fallback")
-        assert result.success is False
+        assert result.success is True  # fallbackが使われるので成功
         assert result.title == "fallback"
+        assert result.method == "fallback"
 
     def test_extract_text_from_html(self) -> None:
         """HTMLテキスト抽出テスト"""
@@ -92,7 +93,7 @@ class TestContentExtractor:
         """コンテンツ取得成功テスト"""
         mock_response = MagicMock()
         mock_response.content = b"<html><body>Test</body></html>"
-        mock_response.headers = {"content-type": "text/html"}
+        mock_response.headers = {"Content-Type": "text/html"}  # 大文字小文字を正確に
         mock_response.raise_for_status.return_value = None
         mock_get.return_value = mock_response
 

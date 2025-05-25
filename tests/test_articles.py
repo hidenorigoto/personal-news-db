@@ -77,8 +77,8 @@ def test_create_article_duplicate_url(client: TestClient) -> None:
     with patch("news_assistant.content.processor.ContentProcessor.process_url"):
         response = client.post("/api/articles/", json=article_data)
 
-    assert response.status_code == 400
-    assert "already exists" in response.json()["detail"]
+    assert response.status_code == 409
+    assert "already registered" in response.json()["detail"]
 
 
 def test_get_articles_empty(client: TestClient) -> None:
@@ -86,10 +86,10 @@ def test_get_articles_empty(client: TestClient) -> None:
     response = client.get("/api/articles/")
     assert response.status_code == 200
     data = response.json()
-    assert data["items"] == []
+    assert data["articles"] == []
     assert data["total"] == 0
-    assert data["page"] == 1
-    assert data["size"] == 50
+    assert data["skip"] == 0
+    assert data["limit"] == 100
 
 
 def test_get_articles_with_data(client: TestClient) -> None:
@@ -97,15 +97,28 @@ def test_get_articles_with_data(client: TestClient) -> None:
     # テスト記事作成
     article_data = {"url": "https://example.com/test1", "title": "Test Article 1"}
 
-    with patch("news_assistant.content.processor.ContentProcessor.process_url"):
+    with patch("news_assistant.content.processor.ContentProcessor.process_url") as mock_process:
+        from pydantic import HttpUrl
+
+        from news_assistant.content.schemas import ProcessedContent
+
+        mock_process.return_value = ProcessedContent(
+            url=HttpUrl("https://example.com/test1"),
+            title="Test Article 1",
+            extracted_text="Extracted content",
+            summary="Generated summary",
+            extension="html",
+            file_path=None,
+        )
+
         client.post("/api/articles/", json=article_data)
 
     response = client.get("/api/articles/")
     assert response.status_code == 200
     data = response.json()
-    assert len(data["items"]) == 1
+    assert len(data["articles"]) == 1
     assert data["total"] == 1
-    assert data["items"][0]["title"] == "Test Article 1"
+    assert data["articles"][0]["title"] == "Test Article 1"
 
 
 def test_get_article_by_id(client: TestClient) -> None:
@@ -113,7 +126,20 @@ def test_get_article_by_id(client: TestClient) -> None:
     # テスト記事作成
     article_data = {"url": "https://example.com/test-get", "title": "Test Get Article"}
 
-    with patch("news_assistant.content.processor.ContentProcessor.process_url"):
+    with patch("news_assistant.content.processor.ContentProcessor.process_url") as mock_process:
+        from pydantic import HttpUrl
+
+        from news_assistant.content.schemas import ProcessedContent
+
+        mock_process.return_value = ProcessedContent(
+            url=HttpUrl("https://example.com/test-get"),
+            title="Test Get Article",
+            extracted_text="Extracted content",
+            summary="Generated summary",
+            extension="html",
+            file_path=None,
+        )
+
         create_response = client.post("/api/articles/", json=article_data)
 
     article_id = create_response.json()["id"]
@@ -183,10 +209,10 @@ def test_pagination(client: TestClient) -> None:
             client.post("/api/articles/", json=article_data)
 
     # ページネーション確認
-    response = client.get("/api/articles/?page=1&size=3")
+    response = client.get("/api/articles/?skip=0&limit=3")
     assert response.status_code == 200
     data = response.json()
-    assert len(data["items"]) == 3
+    assert len(data["articles"]) == 3
     assert data["total"] == 5
-    assert data["page"] == 1
-    assert data["size"] == 3
+    assert data["skip"] == 0
+    assert data["limit"] == 3
