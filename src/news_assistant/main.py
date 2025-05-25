@@ -1,9 +1,9 @@
 """News Assistant API - メインアプリケーション（新構造版）"""
 from fastapi import FastAPI
 
-from .core import settings, create_tables
-from .health import router as health_router
 from .articles import router as articles_router
+from .core import create_tables, settings
+from .health import router as health_router
 
 # アプリケーション初期化
 app = FastAPI(
@@ -29,4 +29,4 @@ async def root() -> dict[str, str | bool]:
         "version": settings.version,
         "status": "running",
         "debug": settings.debug
-    } 
+    }
