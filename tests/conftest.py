@@ -23,21 +23,21 @@ engine = create_engine(
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
-def override_get_db() -> Generator[Session, None, None]:
-    """テスト用データベースセッション取得"""
-    # テーブルが存在しない場合は作成
-    Base.metadata.create_all(bind=engine)
+# override_get_db関数は削除 - clientフィクスチャ内で直接定義
 
-    try:
-        db = TestingSessionLocal()
-        yield db
-    finally:
-        db.close()
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_database() -> None:
+    """テストセッション開始時にデータベースを初期化"""
+    # テーブル作成を確実に実行
+    Base.metadata.create_all(bind=engine)
 
 
 @pytest.fixture
 def db_session() -> Generator[Session, None, None]:
     """テスト用データベースセッションフィクスチャ"""
+    # 既存のテーブルを削除してクリーンな状態にする
+    Base.metadata.drop_all(bind=engine)
     # テーブル作成（モデルがインポートされているため、articlesテーブルも作成される）
     Base.metadata.create_all(bind=engine)
 
@@ -53,8 +53,11 @@ def db_session() -> Generator[Session, None, None]:
 @pytest.fixture
 def client(db_session: Session) -> Generator[TestClient, None, None]:
     """テスト用クライアントフィクスチャ"""
-    # データベース依存関係をオーバーライド
-    app.dependency_overrides[get_db] = override_get_db
+    # データベース依存関係をオーバーライド（db_sessionと同じセッションを使用）
+    def get_test_db() -> Generator[Session, None, None]:
+        yield db_session
+
+    app.dependency_overrides[get_db] = get_test_db
 
     with TestClient(app) as test_client:
         yield test_client
