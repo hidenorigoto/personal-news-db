@@ -1,18 +1,19 @@
 """AI機能モジュールのテスト"""
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from news_assistant.ai import (
-    SummarizerService, 
-    OpenAIProvider, 
+    AIConfig,
+    AIConfigurationError,
+    AIProviderType,
     MockAIProvider,
-    AIConfig, 
-    SummaryRequest, 
-    SummaryResponse,
-    AIProviderType, 
-    SummaryStyle,
+    OpenAIProvider,
+    SummarizerService,
     SummaryGenerationError,
-    AIConfigurationError
+    SummaryRequest,
+    SummaryResponse,
+    SummaryStyle,
 )
 
 
@@ -28,7 +29,7 @@ class TestAIConfig:
             max_tokens=1000,
             temperature=0.3
         )
-        
+
         assert config.provider == AIProviderType.OPENAI
         assert config.model_name == "gpt-3.5-turbo"
         assert config.api_key == "test-key"
@@ -57,7 +58,7 @@ class TestSummaryRequest:
             max_length=500,
             language="ja"
         )
-        
+
         assert request.content == "テストコンテンツ"
         assert request.style == SummaryStyle.CONCISE
         assert request.max_length == 500
@@ -88,14 +89,14 @@ class TestMockAIProvider:
             model_name="mock-model"
         )
         provider = MockAIProvider(config)
-        
+
         request = SummaryRequest(
             content="テストコンテンツ",
             style=SummaryStyle.DETAILED
         )
-        
+
         response = provider.generate_summary(request)
-        
+
         assert isinstance(response, SummaryResponse)
         assert "detailed" in response.summary
         assert response.provider == AIProviderType.LOCAL
@@ -109,7 +110,7 @@ class TestMockAIProvider:
             model_name="mock-model"
         )
         provider = MockAIProvider(config)
-        
+
         assert provider.test_connection() is True
 
 
@@ -122,10 +123,10 @@ class TestOpenAIProvider:
             provider=AIProviderType.OPENAI,
             model_name="gpt-3.5-turbo"
         )
-        
+
         with pytest.raises(AIConfigurationError) as exc_info:
             OpenAIProvider(config)
-        
+
         assert exc_info.value.error_code == "MISSING_API_KEY"
 
     def test_openai_provider_creation_with_api_key(self):
@@ -135,7 +136,7 @@ class TestOpenAIProvider:
             model_name="gpt-3.5-turbo",
             api_key="test-key"
         )
-        
+
         provider = OpenAIProvider(config)
         assert provider.config.api_key == "test-key"
 
@@ -145,16 +146,18 @@ class TestOpenAIProvider:
         # モック設定
         mock_client_instance = MagicMock()
         mock_openai_client.return_value = mock_client_instance
-        
+
         mock_response = MagicMock()
         mock_response.choices[0].message.content = "生成された要約"
         mock_response.choices[0].finish_reason = "stop"
         mock_response.usage.prompt_tokens = 100
         mock_response.usage.completion_tokens = 50
-        mock_response.usage.model_dump.return_value = {"prompt_tokens": 100, "completion_tokens": 50}
-        
+        mock_response.usage.model_dump.return_value = {
+            "prompt_tokens": 100, "completion_tokens": 50
+        }
+
         mock_client_instance.chat.completions.create.return_value = mock_response
-        
+
         # テスト実行
         config = AIConfig(
             provider=AIProviderType.OPENAI,
@@ -162,14 +165,14 @@ class TestOpenAIProvider:
             api_key="test-key"
         )
         provider = OpenAIProvider(config)
-        
+
         request = SummaryRequest(
             content="テストコンテンツ",
             style=SummaryStyle.CONCISE
         )
-        
+
         response = provider.generate_summary(request)
-        
+
         # 検証
         assert response.summary == "生成された要約"
         assert response.provider == AIProviderType.OPENAI
@@ -187,14 +190,14 @@ class TestSummarizerService:
             provider=AIProviderType.LOCAL,
             model_name="mock-model"
         )
-        
+
         summarizer = SummarizerService(config)
-        
+
         response = summarizer.generate_summary(
             content="テストコンテンツ",
             style=SummaryStyle.BULLET_POINTS
         )
-        
+
         assert isinstance(response, SummaryResponse)
         assert "bullet_points" in response.summary
         assert response.provider == AIProviderType.LOCAL
@@ -205,10 +208,10 @@ class TestSummarizerService:
             provider=AIProviderType.LOCAL,
             model_name="mock-model"
         )
-        
+
         summarizer = SummarizerService(config)
         summary = summarizer.generate_simple_summary("テストコンテンツ")
-        
+
         assert isinstance(summary, str)
         assert len(summary) > 0
 
@@ -218,12 +221,12 @@ class TestSummarizerService:
             provider=AIProviderType.LOCAL,
             model_name="mock-model"
         )
-        
+
         summarizer = SummarizerService(config)
-        
+
         with pytest.raises(SummaryGenerationError) as exc_info:
             summarizer.generate_summary("")
-        
+
         assert exc_info.value.error_code == "EMPTY_CONTENT"
 
     def test_provider_info(self):
@@ -234,10 +237,10 @@ class TestSummarizerService:
             max_tokens=500,
             temperature=0.5
         )
-        
+
         summarizer = SummarizerService(config)
         info = summarizer.get_provider_info()
-        
+
         assert info["provider"] == "local"
         assert info["model_name"] == "mock-model"
         assert info["max_tokens"] == 500
@@ -248,7 +251,7 @@ class TestSummarizerService:
     def test_default_config_without_api_key(self):
         """API キーなしでのデフォルト設定テスト"""
         summarizer = SummarizerService()
-        
+
         assert summarizer.config.provider == AIProviderType.LOCAL
         assert summarizer.config.model_name == "mock-model"
 
@@ -256,7 +259,7 @@ class TestSummarizerService:
     def test_default_config_with_api_key(self):
         """API キーありでのデフォルト設定テスト"""
         summarizer = SummarizerService()
-        
+
         assert summarizer.config.provider == AIProviderType.OPENAI
         assert summarizer.config.model_name == "gpt-3.5-turbo"
         assert summarizer.config.api_key == "test-key"
@@ -267,16 +270,16 @@ class TestSummarizerService:
             provider=AIProviderType.LOCAL,
             model_name="mock-model"
         )
-        
+
         summarizer = SummarizerService(initial_config)
         assert summarizer.config.provider == AIProviderType.LOCAL
-        
+
         new_config = AIConfig(
             provider=AIProviderType.OPENAI,
             model_name="gpt-4",
             api_key="new-key"
         )
-        
+
         summarizer.update_config(new_config)
         assert summarizer.config.provider == AIProviderType.OPENAI
         assert summarizer.config.model_name == "gpt-4"
@@ -289,20 +292,21 @@ class TestBackwardCompatibility:
     def test_generate_summary_function(self, mock_get_summarizer):
         """generate_summary関数の後方互換性テスト"""
         from news_assistant.ai.summarizer import generate_summary
-        
+
         mock_summarizer = MagicMock()
         mock_summarizer.generate_simple_summary.return_value = "生成された要約"
         mock_get_summarizer.return_value = mock_summarizer
-        
+
         result = generate_summary("テストコンテンツ")
-        
+
         assert result == "生成された要約"
         mock_summarizer.generate_simple_summary.assert_called_once_with("テストコンテンツ")
 
     def test_summary_module_import(self):
-        """summary.pyからのインポートテスト"""
-        from news_assistant.summary import generate_summary, SummaryGenerationError
-        
+        """新しいAIモジュールからのインポートテスト"""
+        from news_assistant.ai.exceptions import SummaryGenerationError
+        from news_assistant.ai.summarizer import generate_summary
+
         # 関数とクラスが正しくインポートされることを確認
         assert callable(generate_summary)
-        assert issubclass(SummaryGenerationError, Exception) 
+        assert issubclass(SummaryGenerationError, Exception)

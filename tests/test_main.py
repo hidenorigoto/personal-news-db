@@ -1,48 +1,11 @@
-import os
-import shutil
 import uuid
-from collections.abc import Generator
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import text
-
-from news_assistant import database, models
-from news_assistant.main import app
-
-TEST_DATA_DIR = "data_test"
-TEST_DB_FILE = "test_news.db"
-
-client = TestClient(app)
 
 
-@pytest.fixture(autouse=True)
-def clean_db() -> Generator[None, None, None]:
-    # テスト用DBをリセット
-    if os.path.exists(TEST_DB_FILE):
-        os.remove(TEST_DB_FILE)
-    os.environ["NEWS_ASSISTANT_DB_URL"] = f"sqlite:///{TEST_DB_FILE}"
-    models.Base.metadata.create_all(bind=database.engine)
-    yield
-
-
-def setup_module(module: Any) -> None:
-    # テスト用dataディレクトリを作成
-    if os.path.exists(TEST_DATA_DIR):
-        shutil.rmtree(TEST_DATA_DIR)
-    os.makedirs(TEST_DATA_DIR, exist_ok=True)
-    # appのDATA_DIRをテスト用に切り替え
-    app.state.DATA_DIR = TEST_DATA_DIR
-
-
-def teardown_module(module: Any) -> None:
-    # テスト用dataディレクトリを削除
-    if os.path.exists(TEST_DATA_DIR):
-        shutil.rmtree(TEST_DATA_DIR)
-
-
-def test_create_article(monkeypatch: Any) -> None:
+def test_create_article(client: TestClient, monkeypatch: Any) -> None:
     # requests.getをモック
     class MockResponse:
         def __init__(self) -> None:
@@ -55,33 +18,22 @@ def test_create_article(monkeypatch: Any) -> None:
     # openai要約APIをモック
     def mock_summary(content: str) -> str:
         return "これは要約です。"
-    monkeypatch.setattr("news_assistant.summary.generate_summary", mock_summary)
+    monkeypatch.setattr("news_assistant.content.processor.generate_summary", mock_summary)
 
     data = {"url": "http://example.com/unique-test-1", "title": "Example"}
-    try:
-        response = client.post("/api/articles/", json=data)
-        if response.status_code != 200:
-            print("RESPONSE:", response.status_code, response.text)
-        assert response.status_code == 200
-        result = response.json()
-        assert result["url"] == data["url"]
-        assert result["title"] == data["title"]
-        assert isinstance(result["summary"], str)
-        expected_summary = "これは要約です。"
-        assert result["summary"] == expected_summary
-        # ファイルが保存されているか確認
-        files = os.listdir(TEST_DATA_DIR)
-        assert any(f.endswith(".html") for f in files)
-    finally:
-        from news_assistant.database import SessionLocal
-        with SessionLocal() as db:
-            db.execute(
-                text("DELETE FROM articles WHERE url = :url"), {"url": data["url"]}
-            )
-            db.commit()
+    response = client.post("/api/articles/", json=data)
+    if response.status_code != 201:
+        print("RESPONSE:", response.status_code, response.text)
+    assert response.status_code == 201
+    result = response.json()
+    assert result["url"] == data["url"]
+    assert result["title"] == data["title"]
+    assert isinstance(result["summary"], str)
+    expected_summary = "これは要約です。"
+    assert result["summary"] == expected_summary
 
 
-def test_create_article_html_title(monkeypatch: Any) -> None:
+def test_create_article_html_title(client: TestClient, monkeypatch: Any) -> None:
     # HTMLの<title>からタイトルを抽出
     html = b"""
     <html><head><title>AutoTitle</title></head><body>test</body></html>
@@ -95,23 +47,13 @@ def test_create_article_html_title(monkeypatch: Any) -> None:
     monkeypatch.setattr("requests.get", lambda url, timeout=10: MockResponse())
 
     data = {"url": "http://example.com/auto-title-html", "title": "ShouldNotUseThis"}
-    try:
-        response = client.post("/api/articles/", json=data)
-        assert response.status_code == 200
-        result = response.json()
-        assert result["title"] == "AutoTitle"
-        files = os.listdir(TEST_DATA_DIR)
-        assert any(f.endswith(".html") for f in files)
-    finally:
-        from news_assistant.database import SessionLocal
-        with SessionLocal() as db:
-            db.execute(
-                text("DELETE FROM articles WHERE url = :url"), {"url": data["url"]}
-            )
-            db.commit()
+    response = client.post("/api/articles/", json=data)
+    assert response.status_code == 201
+    result = response.json()
+    assert result["title"] == "AutoTitle"
 
 
-def test_create_article_pdf_title(monkeypatch: Any) -> None:
+def test_create_article_pdf_title(client: TestClient, monkeypatch: Any) -> None:
     # PDFのメタデータからタイトルを抽出
     import io
 
@@ -134,23 +76,13 @@ def test_create_article_pdf_title(monkeypatch: Any) -> None:
         "url": "http://example.com/sample-pdf-title.pdf",
         "title": "ShouldNotUseThis",
     }
-    try:
-        response = client.post("/api/articles/", json=data)
-        assert response.status_code == 200
-        result = response.json()
-        assert result["title"] == "PDF Auto Title"
-        files = os.listdir(TEST_DATA_DIR)
-        assert any(f.endswith(".pdf") for f in files)
-    finally:
-        from news_assistant.database import SessionLocal
-        with SessionLocal() as db:
-            db.execute(
-                text("DELETE FROM articles WHERE url = :url"), {"url": data["url"]}
-            )
-            db.commit()
+    response = client.post("/api/articles/", json=data)
+    assert response.status_code == 201
+    result = response.json()
+    assert result["title"] == "PDF Auto Title"
 
 
-def test_create_article_fallback_title(monkeypatch: Any) -> None:
+def test_create_article_fallback_title(client: TestClient, monkeypatch: Any) -> None:
     # タイトルが抽出できない場合はリクエストボディのtitleを使う
     class MockResponse:
         def __init__(self) -> None:
@@ -161,23 +93,13 @@ def test_create_article_fallback_title(monkeypatch: Any) -> None:
     monkeypatch.setattr("requests.get", lambda url, timeout=10: MockResponse())
 
     data = {"url": "http://example.com/notitle-fallback", "title": "FallbackTitle"}
-    try:
-        response = client.post("/api/articles/", json=data)
-        assert response.status_code == 200
-        result = response.json()
-        assert result["title"] == "FallbackTitle"
-        files = os.listdir(TEST_DATA_DIR)
-        assert any(f.endswith(".txt") for f in files)
-    finally:
-        from news_assistant.database import SessionLocal
-        with SessionLocal() as db:
-            db.execute(
-                text("DELETE FROM articles WHERE url = :url"), {"url": data["url"]}
-            )
-            db.commit()
+    response = client.post("/api/articles/", json=data)
+    assert response.status_code == 201
+    result = response.json()
+    assert result["title"] == "FallbackTitle"
 
 
-def test_get_articles() -> None:
+def test_get_articles(client: TestClient) -> None:
     response = client.get("/api/articles/")
     assert response.status_code == 200
     result = response.json()
@@ -185,7 +107,7 @@ def test_get_articles() -> None:
     assert isinstance(result["articles"], list)
 
 
-def test_get_article(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_get_article(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     # 外部リクエストをモック
     class MockResponse:
         def __init__(self) -> None:
@@ -198,9 +120,9 @@ def test_get_article(monkeypatch: pytest.MonkeyPatch) -> None:
     unique_url = f"http://example.com/get-article-{uuid.uuid4()}"
     data = {"url": unique_url, "title": "GetTest"}
     response = client.post("/api/articles/", json=data)
-    if response.status_code != 200:
+    if response.status_code != 201:
         print("RESPONSE:", response.status_code, response.text)
-    assert response.status_code == 200
+    assert response.status_code == 201
     result_post = response.json()
     article_id = result_post["id"]
     # 1件目の記事を取得

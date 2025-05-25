@@ -4,8 +4,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from news_assistant.main import app
 from news_assistant.core import Base, get_db
+from news_assistant.main import app
 
 # テスト用データベース設定
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test_articles.db"
@@ -45,10 +45,10 @@ def test_create_article():
         "title": "Test Article",
         "summary": "This is a test article"
     }
-    
+
     response = client.post("/api/articles/", json=article_data)
     assert response.status_code == 201
-    
+
     data = response.json()
     assert data["url"] == article_data["url"]
     assert data["title"] == article_data["title"]
@@ -64,11 +64,11 @@ def test_create_article_duplicate_url():
         "title": "Test Article",
         "summary": "This is a test article"
     }
-    
+
     # 最初の記事作成
     response1 = client.post("/api/articles/", json=article_data)
     assert response1.status_code == 201
-    
+
     # 同じURLで再度作成（エラーになるはず）
     response2 = client.post("/api/articles/", json=article_data)
     assert response2.status_code == 409
@@ -78,7 +78,7 @@ def test_get_articles_empty():
     """空の記事一覧取得テスト"""
     response = client.get("/api/articles/")
     assert response.status_code == 200
-    
+
     data = response.json()
     assert data["articles"] == []
     assert data["total"] == 0
@@ -96,11 +96,11 @@ def test_get_articles_with_data():
     }
     create_response = client.post("/api/articles/", json=article_data)
     assert create_response.status_code == 201
-    
+
     # 記事一覧取得
     response = client.get("/api/articles/")
     assert response.status_code == 200
-    
+
     data = response.json()
     assert len(data["articles"]) == 1
     assert data["total"] == 1
@@ -118,11 +118,11 @@ def test_get_article_by_id():
     create_response = client.post("/api/articles/", json=article_data)
     assert create_response.status_code == 201
     article_id = create_response.json()["id"]
-    
+
     # ID指定で取得
     response = client.get(f"/api/articles/{article_id}")
     assert response.status_code == 200
-    
+
     data = response.json()
     assert data["id"] == article_id
     assert data["title"] == article_data["title"]
@@ -145,7 +145,7 @@ def test_update_article():
     create_response = client.post("/api/articles/", json=article_data)
     assert create_response.status_code == 201
     article_id = create_response.json()["id"]
-    
+
     # 記事更新
     update_data = {
         "title": "Updated Title",
@@ -153,7 +153,7 @@ def test_update_article():
     }
     response = client.put(f"/api/articles/{article_id}", json=update_data)
     assert response.status_code == 200
-    
+
     data = response.json()
     assert data["title"] == update_data["title"]
     assert data["summary"] == update_data["summary"]
@@ -170,11 +170,11 @@ def test_delete_article():
     create_response = client.post("/api/articles/", json=article_data)
     assert create_response.status_code == 201
     article_id = create_response.json()["id"]
-    
+
     # 記事削除
     response = client.delete(f"/api/articles/{article_id}")
     assert response.status_code == 204
-    
+
     # 削除確認
     get_response = client.get(f"/api/articles/{article_id}")
     assert get_response.status_code == 404
@@ -191,13 +191,13 @@ def test_pagination():
         }
         response = client.post("/api/articles/", json=article_data)
         assert response.status_code == 201
-    
+
     # ページネーション確認
     response = client.get("/api/articles/?skip=2&limit=2")
     assert response.status_code == 200
-    
+
     data = response.json()
     assert len(data["articles"]) == 2
     assert data["total"] == 5
     assert data["skip"] == 2
-    assert data["limit"] == 2 
+    assert data["limit"] == 2
