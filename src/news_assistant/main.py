@@ -24,6 +24,26 @@ app.state.DATA_DIR = "data"
 os.makedirs(app.state.DATA_DIR, exist_ok=True)
 
 
+@app.get("/")
+async def root() -> dict[str, str]:
+    """ルートエンドポイント"""
+    return {
+        "message": "News Assistant API",
+        "version": "0.1.0",
+        "status": "running"
+    }
+
+
+@app.get("/health")
+async def health_check() -> dict[str, str]:
+    """ヘルスチェックエンドポイント"""
+    return {
+        "status": "healthy",
+        "version": "0.1.0",
+        "service": "News Assistant API"
+    }
+
+
 def get_extension_from_content_type(content_type: str, url: str = "") -> str:
     mime = content_type.split(";")[0].strip().lower() if content_type else ""
     mime_map = {
