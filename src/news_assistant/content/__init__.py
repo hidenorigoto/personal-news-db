@@ -6,7 +6,7 @@ from .schemas import ContentData, ProcessedContent
 
 __all__ = [
     "ContentExtractor",
-    "ContentProcessor", 
+    "ContentProcessor",
     "ContentData",
     "ProcessedContent",
 ]

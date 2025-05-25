@@ -1,7 +1,6 @@
 """コンテンツ抽出機能"""
 import io
 import logging
-from typing import Optional
 from urllib.parse import urlparse
 
 import pypdf
@@ -9,7 +8,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from ..core import ContentProcessingError
-from .schemas import ContentData, TitleExtractionResult, TextExtractionResult
+from .schemas import ContentData, TextExtractionResult, TitleExtractionResult
 
 logger = logging.getLogger(__name__)
 
@@ -23,14 +22,15 @@ class ContentExtractor:
         try:
             response = requests.get(url, timeout=timeout)
             response.raise_for_status()
-            
+
             content_type = response.headers.get("Content-Type", "")
             extension = ContentExtractor._get_extension_from_content_type(
                 content_type, url
             )
-            
+
+            from pydantic import HttpUrl
             return ContentData(
-                url=url,
+                url=HttpUrl(url),
                 content=response.content,
                 content_type=content_type,
                 extension=extension
@@ -55,10 +55,10 @@ class ContentExtractor:
             "text/plain": "txt",
             "application/pdf": "pdf",
         }
-        
+
         if mime in mime_map:
             return mime_map[mime]
-        
+
         if not mime:
             # URLから拡張子を抽出
             path = urlparse(url).path
@@ -67,7 +67,7 @@ class ContentExtractor:
             if ext in allowed:
                 return "html" if ext == "htm" else ext
             return "html"
-        
+
         if "/" in mime:
             return mime.split("/")[-1]
         return "bin"
@@ -109,7 +109,7 @@ class ContentExtractor:
                 )
         except Exception as e:
             logger.warning(f"HTML title extraction failed: {e}")
-        
+
         return TitleExtractionResult(
             title="",
             success=False,
@@ -131,7 +131,7 @@ class ContentExtractor:
                     )
         except Exception as e:
             logger.warning(f"PDF title extraction failed: {e}")
-        
+
         return TitleExtractionResult(
             title="",
             success=False,
@@ -173,7 +173,7 @@ class ContentExtractor:
                 text = body.get_text(separator="\n", strip=True)
             else:
                 text = soup.get_text(separator="\n", strip=True)
-            
+
             return TextExtractionResult(
                 text=text,
                 success=True,
@@ -197,7 +197,7 @@ class ContentExtractor:
                 for page in reader.pages:
                     text_parts.append(page.extract_text())
                 text = "\n".join(text_parts)
-                
+
                 return TextExtractionResult(
                     text=text,
                     success=True,
@@ -220,7 +220,7 @@ class ContentExtractor:
                 text = content.decode("utf-8")
             except UnicodeDecodeError:
                 text = content.decode("latin-1")
-            
+
             return TextExtractionResult(
                 text=text,
                 success=True,
@@ -232,4 +232,4 @@ class ContentExtractor:
                 text="",
                 success=False,
                 word_count=0
-            ) 
+            )

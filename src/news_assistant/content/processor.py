@@ -1,11 +1,11 @@
 """コンテンツ処理統合機能"""
-import os
 import logging
+import os
 from datetime import datetime
-from typing import Optional
 
-from ..core import ContentProcessingError, settings
-from ..summary import generate_summary, SummaryGenerationError
+from ..core import ContentProcessingError
+from ..ai.exceptions import SummaryGenerationError
+from ..ai.summarizer import generate_summary
 from .extractor import ContentExtractor
 from .schemas import ContentData, ProcessedContent
 
@@ -24,25 +24,25 @@ class ContentProcessor:
         os.makedirs(self.data_dir, exist_ok=True)
 
     def process_url(
-        self, 
-        url: str, 
+        self,
+        url: str,
         fallback_title: str = "",
-        article_id: Optional[int] = None,
+        article_id: int | None = None,
         generate_summary_flag: bool = True
     ) -> ProcessedContent:
         """URLを処理して完全なコンテンツデータを生成"""
         try:
             # 1. コンテンツ取得
             content_data = ContentExtractor.fetch_content(url)
-            
+
             # 2. タイトル抽出
             title_result = ContentExtractor.extract_title(content_data, fallback_title)
             final_title = title_result.title if title_result.success else fallback_title
-            
+
             # 3. テキスト抽出
             text_result = ContentExtractor.extract_text(content_data)
             extracted_text = text_result.text if text_result.success else ""
-            
+
             # 4. 要約生成
             summary = ""
             if generate_summary_flag and extracted_text.strip():
@@ -52,21 +52,22 @@ class ContentProcessor:
                 except SummaryGenerationError as e:
                     logger.warning(f"Summary generation failed for {url}: {e}")
                     summary = ""
-            
+
             # 5. ファイル保存
             file_path = None
             if article_id is not None:
                 file_path = self._save_content(content_data, article_id)
-            
+
+            from pydantic import HttpUrl
             return ProcessedContent(
-                url=url,
+                url=HttpUrl(url),
                 title=final_title,
                 extracted_text=extracted_text,
                 summary=summary,
                 extension=content_data.extension,
                 file_path=file_path
             )
-            
+
         except Exception as e:
             if isinstance(e, ContentProcessingError):
                 raise
@@ -83,13 +84,13 @@ class ContentProcessor:
             date_str = datetime.now().strftime("%Y%m%d")
             filename = f"{date_str}_{article_id}.{content_data.extension}"
             file_path = os.path.join(self.data_dir, filename)
-            
+
             with open(file_path, "wb") as f:
                 f.write(content_data.content)
-            
+
             logger.info(f"Content saved to {file_path}")
             return file_path
-            
+
         except Exception as e:
             logger.error(f"Failed to save content for article {article_id}: {e}")
             raise ContentProcessingError(
@@ -126,4 +127,4 @@ class ContentProcessor:
             return generate_summary(text)
         except SummaryGenerationError as e:
             logger.warning(f"Summary generation failed: {e}")
-            return "" 
+            return ""

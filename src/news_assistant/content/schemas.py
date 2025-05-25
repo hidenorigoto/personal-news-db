@@ -1,5 +1,5 @@
 """コンテンツ処理関連のPydanticスキーマ"""
-from typing import Optional
+
 from pydantic import BaseModel, Field, HttpUrl
 
 
@@ -18,7 +18,7 @@ class ProcessedContent(BaseModel):
     extracted_text: str = Field(default="", description="抽出されたテキスト")
     summary: str = Field(default="", description="生成された要約")
     extension: str = Field(..., description="ファイル拡張子")
-    file_path: Optional[str] = Field(None, description="保存されたファイルパス")
+    file_path: str | None = Field(None, description="保存されたファイルパス")
 
 
 class TitleExtractionResult(BaseModel):
@@ -32,4 +32,4 @@ class TextExtractionResult(BaseModel):
     """テキスト抽出結果"""
     text: str = Field(default="", description="抽出されたテキスト")
     success: bool = Field(..., description="抽出成功フラグ")
-    word_count: int = Field(default=0, description="文字数") 
+    word_count: int = Field(default=0, description="文字数")
