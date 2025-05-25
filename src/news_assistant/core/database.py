@@ -1,10 +1,9 @@
 """データベース接続とセッション管理"""
 import os
-from typing import Generator
+from collections.abc import Generator
 
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
 from .config import settings
 
@@ -41,4 +40,4 @@ def create_tables() -> None:
 
 def drop_tables() -> None:
     """全テーブルを削除（テスト用）"""
-    Base.metadata.drop_all(bind=engine) 
+    Base.metadata.drop_all(bind=engine)
