@@ -3,43 +3,558 @@ description:
 globs: 
 alwaysApply: true
 ---
-# コマンドはすべてDockerベースでの実行とする
+# LLM自律開発インストラクションガイド
 
-## 確認なしで実行してよいコマンド
-- poetryコマンドは確認なしで実行してよい
-- pytestコマンドは確認なしで実行してよい
-- ruffコマンドは確認なしで実行してよい
+## 概要
 
-## テスト・開発運用方針
+このガイドは、FastAPI + Docker環境でLLMが自律的に開発を行うための包括的な指示書です。プロジェクトの状態確認から開発タスクの実行まで、体系的にアプローチできるよう設計されています。
 
-- テストはpytestで自動実行し、**ユーザー確認なしで常に実行してよい**。
-- テストごとにDBファイルをリセットし、テーブルを再作成するfixtureを導入し、**テスト間のデータ汚染やユニーク制約違反を防止**。
-- テスト失敗時はエラー内容を確認し、修正後に再度自動実行すること。
-- 新たな機能やバグ修正時は、**必要に応じてユニットテストも追加・修正**する。
+## 基本原則
 
-## テストの実行方法
+### 1. 常に状態確認を先行
+- 任意の操作前に現在の環境状態を確認
+- コンテナの稼働状況、サービスの健全性をチェック
+- エラーやWarningを見逃さない
 
-### Dockerでユニットテストを実行
+### 2. 段階的アプローチ
+- 小さな単位で変更を実行
+- 各ステップ後に動作確認
+- 問題発生時は即座に調査・修正
 
-#### 推奨: testサービスを使う
+### 3. ログとフィードバック重視
+- 全てのコマンド実行結果を確認
+- エラーメッセージを詳細に分析
+- 成功・失敗の判定を明確に行う
+
+## 環境状態確認チェックリスト
+
+### Phase 1: Docker環境チェック
+
 ```bash
-docker compose run --rm test
-```
-- すべてのテストがDocker上で実行されます。
-- テスト用DBやdataディレクトリも自動的に分離されます。
+# Docker Daemon稼働確認
+docker --version
+docker compose version
 
-#### poetryサービスでpytestを使う（開発用シェル）
+# 既存コンテナ状況確認
+docker ps -a
+docker compose -f docker-compose.yml -f docker-compose.dev.yml ps
+
+# ネットワーク状況確認
+docker network ls | grep fastapi
+
+# ボリューム状況確認
+docker volume ls | grep fastapi
+```
+
+**確認ポイント:**
+- [ ] Docker Daemonが稼働中
+- [ ] 必要なコンテナが正常起動
+- [ ] ネットワークが適切に作成
+- [ ] データベースボリュームが存在
+
+### Phase 2: サービス健全性チェック
+
 ```bash
-docker compose run --rm poetry poetry run pytest
+# アプリケーション状態確認
+curl -f http://localhost:8000/health || echo "API not responding"
+curl -s http://localhost:8000/docs | head -5 || echo "Swagger not accessible"
+
+# APIエンドポイント基本確認
+curl -s http://localhost:8000/ | jq '.' || echo "Root endpoint not accessible"
 ```
 
-## 開発・修正時のユニットテスト実行に関する指針
+**確認ポイント:**
+- [ ] FastAPI `/health`エンドポイントが応答
+- [ ] Swagger UIがアクセス可能
+- [ ] ルートエンドポイントが応答
 
-- プログラムの修正や新機能追加を行った際は、**必ずユニットテストとruff checkを実行し、全てのテストがパスすることを確認してください**。
-- テストが失敗した場合は、修正内容を見直し、**エラーや警告が出ない状態**でコミット・プルリクエストを作成してください。
-- テストの実行には以下のコマンドを使用します（プロジェクトルートで実行）：
-  ```bash
-  pytest
-  ```
-- 新たな機能やバグ修正を行った場合は、**必要に応じてユニットテストも追加・修正**してください。
+### Phase 3: アプリケーション状態チェック
 
+```bash
+# アプリケーション内部状態確認
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli python -c "
+from app.core.config import settings
+print(f'Environment: {settings.ENVIRONMENT}')
+print(f'Debug mode: {settings.DEBUG}')
+print(f'Project name: {settings.PROJECT_NAME}')
+print('Application configuration loaded successfully')
+"
+
+# 基本的なimportテスト
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli python -c "
+try:
+    from app.main import app
+    print(f'FastAPI app loaded successfully')
+    print(f'Registered routes: {len(app.routes)}')
+    for route in app.routes[:5]:  # 最初の5つのルートを表示
+        if hasattr(route, 'path'):
+            print(f'  - {route.path}')
+except Exception as e:
+    print(f'Import error: {e}')
+"
+```
+
+**確認ポイント:**
+- [ ] アプリケーション設定が正常に読み込み
+- [ ] FastAPIアプリが正常にimport
+- [ ] ルートが適切に登録
+
+## 開発タスク実行フローチャート
+
+### 新機能開発時
+
+```mermaid
+graph TD
+    A[要件確認] --> B[環境状態チェック]
+    B --> C{環境正常?}
+    C -->|No| D[環境修復]
+    D --> B
+    C -->|Yes| E[テスト作成]
+    E --> F[実装]
+    F --> G[テスト実行]
+    G --> H{テスト通過?}
+    H -->|No| I[修正]
+    I --> F
+    H -->|Yes| J[コード品質チェック]
+    J --> K[動作確認]
+    K --> L[完了]
+```
+
+### 1. 新規API作成手順
+
+```bash
+# Step 1: 現在の状態確認
+docker compose -f docker-compose.yml -f docker-compose.dev.yml ps
+curl -f http://localhost:8000/health
+
+# Step 2: テストファーストアプローチ
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli bash -c "
+cat > tests/test_new_feature.py << 'EOF'
+import pytest
+from fastapi.testclient import TestClient
+from app.main import app
+
+client = TestClient(app)
+
+def test_new_endpoint():
+    response = client.get('/api/v1/new-feature')
+    assert response.status_code == 200
+    assert 'expected_field' in response.json()
+EOF
+"
+
+# Step 3: 失敗することを確認
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli pytest tests/test_new_feature.py -v
+
+# Step 4: 実装
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli bash -c "
+cat > app/routers/new_feature.py << 'EOF'
+from fastapi import APIRouter
+from typing import Dict, Any
+
+router = APIRouter()
+
+@router.get('/new-feature')
+async def get_new_feature() -> Dict[str, Any]:
+    return {'expected_field': 'value', 'status': 'success'}
+EOF
+"
+
+# Step 5: ルーター登録
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli bash -c "
+# main.pyにルーター追加のコードを挿入
+python -c \"
+import re
+with open('app/main.py', 'r') as f:
+    content = f.read()
+
+# ルーターimport追加
+if 'from app.routers import new_feature' not in content:
+    content = re.sub(
+        r'(from app.routers import.*)',
+        r'\1, new_feature',
+        content
+    )
+
+# ルーター登録追加
+if 'new_feature.router' not in content:
+    content = re.sub(
+        r'(app\.include_router\(.*\n)',
+        r'\1app.include_router(new_feature.router, prefix=\"/api/v1\", tags=[\"new-feature\"])\n',
+        content
+    )
+
+with open('app/main.py', 'w') as f:
+    f.write(content)
+\"
+"
+
+# Step 6: テスト実行
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli pytest tests/test_new_feature.py -v
+
+# Step 7: 全体テスト実行
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli pytest -v
+
+# Step 8: 動作確認
+curl -f http://localhost:8000/api/v1/new-feature | jq '.'
+```
+
+### 2. データモデル追加手順
+
+```bash
+# Step 1: Pydanticモデル定義作成
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli bash -c "
+cat > app/models/new_model.py << 'EOF'
+from pydantic import BaseModel, Field
+from typing import Optional
+from datetime import datetime
+
+class NewModel(BaseModel):
+    id: Optional[int] = None
+    name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    is_active: bool = True
+    created_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
+
+class NewModelCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    is_active: bool = True
+
+class NewModelUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    is_active: Optional[bool] = None
+EOF
+"
+
+# Step 2: モデルのimportテスト
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli python -c "
+from app.models.new_model import NewModel, NewModelCreate, NewModelUpdate
+print('New model imported successfully')
+# 基本的な検証テスト
+test_data = {'name': 'Test', 'description': 'Test description'}
+model = NewModel(**test_data)
+print(f'Model validation successful: {model.name}')
+"
+
+# Step 3: APIエンドポイント作成
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli bash -c "
+cat > app/routers/new_model.py << 'EOF'
+from fastapi import APIRouter, HTTPException
+from typing import List, Dict, Any
+from app.models.new_model import NewModel, NewModelCreate, NewModelUpdate
+
+router = APIRouter()
+
+# インメモリストレージ（実際のプロジェクトではデータベースを使用）
+storage: Dict[int, Dict[str, Any]] = {}
+current_id = 1
+
+@router.post('/models', response_model=NewModel)
+async def create_model(model: NewModelCreate):
+    global current_id
+    model_data = model.dict()
+    model_data['id'] = current_id
+    model_data['created_at'] = datetime.now()
+    storage[current_id] = model_data
+    current_id += 1
+    return NewModel(**model_data)
+
+@router.get('/models', response_model=List[NewModel])
+async def get_models():
+    return [NewModel(**data) for data in storage.values()]
+
+@router.get('/models/{model_id}', response_model=NewModel)
+async def get_model(model_id: int):
+    if model_id not in storage:
+        raise HTTPException(status_code=404, detail='Model not found')
+    return NewModel(**storage[model_id])
+EOF
+"
+```
+
+### 3. デバッグ・トラブルシューティング手順
+
+```bash
+# Step 1: ログ確認
+docker compose -f docker-compose.yml -f docker-compose.dev.yml logs api --tail=50
+docker compose -f docker-compose.yml -f docker-compose.dev.yml logs db --tail=20
+docker compose -f docker-compose.yml -f docker-compose.dev.yml logs redis --tail=20
+
+# Step 2: コンテナ内部調査
+docker compose -f docker-compose.yml -f docker-compose.dev.yml exec api bash -c "
+echo 'Python packages:'
+pip list | grep fastapi
+echo 'Environment variables:'
+printenv | grep -E '(ENVIRONMENT|DEBUG|SECRET)'
+echo 'Process status:'
+ps aux | grep python
+echo 'Port binding:'
+netstat -tlnp | grep 8000
+"
+
+# Step 3: アプリケーション内部状態確認
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli python -c "
+from app.core.config import settings
+
+print('=== Configuration ===')
+print(f'Environment: {settings.ENVIRONMENT}')
+print(f'Debug mode: {settings.DEBUG}')
+print(f'Project name: {settings.PROJECT_NAME}')
+
+print('\n=== Application Test ===')
+try:
+    from app.main import app
+    print('FastAPI app imported successfully')
+    print(f'Registered routes: {len(app.routes)}')
+    
+    # ルート情報の詳細表示
+    for route in app.routes:
+        if hasattr(route, 'path') and hasattr(route, 'methods'):
+            methods = getattr(route, 'methods', {})
+            print(f'  {route.path} [{list(methods)}]')
+            
+except Exception as e:
+    print(f'Import error: {e}')
+    import traceback
+    traceback.print_exc()
+
+print('\n=== Module Import Test ===')
+try:
+    import app.core
+    import app.routers
+    print('Core modules imported successfully')
+except Exception as e:
+    print(f'Module import error: {e}')
+"
+```
+
+## コード品質確保プロトコル
+
+### 1. 自動コード品質チェック
+
+```bash
+# 完全な品質チェックスイート
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli bash -c "
+echo '=== Running Code Quality Checks ==='
+
+echo '1. Code formatting with Black...'
+black --check app tests || (echo 'Format issues found' && black app tests)
+
+echo '2. Import sorting with isort...'
+isort --check-only app tests || (echo 'Import issues found' && isort app tests)
+
+echo '3. Linting with Ruff...'
+ruff check app tests
+
+echo '4. Type checking with MyPy...'
+mypy app
+
+echo '5. Security check with Bandit...'
+bandit -r app
+
+echo '=== Code Quality Check Complete ==='
+"
+```
+
+### 2. テスト実行プロトコル
+
+```bash
+# 包括的テスト実行
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile test run --rm test bash -c "
+echo '=== Running Test Suite ==='
+
+echo '1. Unit tests...'
+pytest tests/unit/ -v --tb=short
+
+echo '2. Integration tests...'
+pytest tests/integration/ -v --tb=short
+
+echo '3. API tests...'
+pytest tests/api/ -v --tb=short
+
+echo '4. Coverage report...'
+pytest --cov=app --cov-report=term --cov-report=html
+
+echo '=== Test Suite Complete ==='
+"
+```
+
+## 問題解決決定木
+
+### API応答問題の場合
+
+```
+API応答なし
+├── コンテナ停止中？
+│   ├── Yes → docker compose up -d
+│   └── No → 次へ
+├── ポート競合？
+│   ├── Yes → ポート変更または競合解決
+│   └── No → 次へ
+├── アプリケーションエラー？
+│   ├── Yes → ログ確認 → エラー修正
+│   └── No → 次へ
+└── ネットワーク問題？
+    ├── Yes → docker network inspect
+    └── No → 詳細調査
+```
+
+### アプリケーション起動問題の場合
+
+```
+アプリ起動エラー
+├── 依存関係エラー？
+│   ├── Yes → pip install -e ".[dev,test]"
+│   └── No → 次へ
+├── 設定ファイル問題？
+│   ├── Yes → .env ファイル確認・修正
+│   └── No → 次へ
+├── Pythonパス問題？
+│   ├── Yes → PYTHONPATH設定確認
+│   └── No → 次へ
+└── ポート・権限問題？
+    └── コンテナ設定確認
+```
+
+## 定期メンテナンス手順
+
+### 日次チェック
+
+```bash
+# 毎日実行推奨の健全性チェック
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli bash -c "
+echo '=== Daily Health Check ==='
+
+echo '1. Service status...'
+curl -f http://localhost:8000/health
+
+echo '2. Application import test...'
+python -c 'from app.main import app; print(\"App OK\" if app else \"App ERROR\")'
+
+echo '3. Configuration test...'
+python -c 'from app.core.config import settings; print(f\"Config OK - {settings.ENVIRONMENT}\")'
+
+echo '4. Basic API test...'
+python -c 'import requests; r = requests.get(\"http://localhost:8000/\"); print(f\"API OK - Status: {r.status_code}\")'
+
+echo '5. Test suite...'
+pytest --maxfail=1 -q
+
+echo '=== Daily Check Complete ==='
+"
+```
+
+### 週次メンテナンス
+
+```bash
+# 週次実行推奨のクリーンアップ
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli bash -c "
+echo '=== Weekly Maintenance ==='
+
+echo '1. Full test suite...'
+pytest -v
+
+echo '2. Code quality check...'
+black app tests
+isort app tests
+ruff check app tests
+mypy app
+
+echo '3. Security scan...'
+bandit -r app
+
+echo '4. Dependency check...'
+pip list --outdated
+
+echo '=== Weekly Maintenance Complete ==='
+"
+
+# Docker リソースクリーンアップ
+docker system prune -f
+docker volume prune -f
+```
+
+## 緊急対応プロトコル
+
+### 完全環境リセット
+
+```bash
+# 全てを停止・削除して最初から構築
+echo "WARNING: This will destroy all data. Continue? (y/N)"
+read -r response
+if [[ "$response" =~ ^[Yy]$ ]]; then
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml down -v
+    docker system prune -f
+    docker volume prune -f
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml build --no-cache
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+    
+    # 基本設定の再実行
+    sleep 30
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli alembic upgrade head
+    docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli pytest --maxfail=1
+    
+    echo "Environment reset complete"
+fi
+```
+
+### バックアップ・リストア
+
+```bash
+# アプリケーション設定のバックアップ
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli bash -c "
+tar -czf backup_$(date +%Y%m%d_%H%M%S).tar.gz app/ tests/ pyproject.toml .env
+echo 'Application backup created'
+"
+
+# 設定ファイルのリストア
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli bash -c "
+tar -xzf backup_file.tar.gz
+echo 'Application restored from backup'
+"
+```
+
+## LLM実行時の判定基準
+
+### 成功判定基準
+- [ ] HTTPステータスコード 200-299
+- [ ] `"status": "healthy"` 等の成功レスポンス
+- [ ] テスト実行結果が PASSED
+- [ ] エラーメッセージの不在
+
+### 要注意判定基準
+- [ ] HTTPステータスコード 300-399（リダイレクト）
+- [ ] Warning レベルのログメッセージ
+- [ ] 遅いレスポンス時間（>5秒）
+- [ ] テスト実行結果に SKIPPED が含まれる
+
+### 失敗判定基準
+- [ ] HTTPステータスコード 400-599
+- [ ] Exception または Error メッセージ
+- [ ] 接続タイムアウト
+- [ ] テスト実行結果が FAILED
+
+### 再試行判定基準
+- [ ] 一時的なネットワークエラー
+- [ ] コンテナ起動中の接続エラー
+- [ ] リソース不足によるタイムアウト
+
+## まとめ
+
+このガイドに従うことで、LLMは以下を体系的に実行できます：
+
+1. **状態確認**: 環境の健全性を段階的にチェック
+2. **問題特定**: エラーの原因を決定木に沿って特定
+3. **解決実行**: 適切な手順で問題を解決
+4. **品質確保**: コード品質とテストを継続的に維持
+5. **緊急対応**: 重大な問題発生時の迅速な復旧
+
+各ステップでの判定基準を明確にし、自律的かつ確実な開発が可能になります。

@@ -3,232 +3,1224 @@ description:
 globs: 
 alwaysApply: true
 ---
-# Python Project Rules for Cursor Agent Coding
+# Docker FastAPI開発環境構築ガイド（2024-2025年版）
 
-## プロジェクト構造とセットアップ
+## 概要
 
-### 依存関係管理
-- `pyproject.toml`を使用してプロジェクトメタデータと依存関係を管理する
-- Poetry、uv、またはpipenvを使用した仮想環境管理を推奨
-- `requirements.txt`ではなく`pyproject.toml`の`[tool.poetry.dependencies]`または`[project.dependencies]`を使用
-- 開発用依存関係は`[tool.poetry.group.dev.dependencies]`または`[project.optional-dependencies]`で管理
+このガイドでは、Dockerとdocker-composeを使用して、FastAPI Webアプリケーション開発における以下のコンテナ分離パターンを実装します：
 
-### プロジェクト構造
+- **アプリケーションサーバーコンテナ**: FastAPI/Uvicorn サーバー実行用
+- **開発コマンドコンテナ**: CLI操作、パッケージ管理、テスト実行用  
+- **本番環境用コンテナ**: 本番デプロイ用の最適化されたコンテナ
+
+## 推奨ディレクトリ構造（モジュール機能ベース）
+
+**2024-2025年の最新ベストプラクティス**: 大規模・中規模プロジェクトには**モジュール機能ベース構造**を推奨
+
+```
+fastapi-project/
+├── docker/
+│   ├── Dockerfile
+│   ├── docker-compose.yml
+│   ├── docker-compose.dev.yml
+│   └── docker-compose.prod.yml
+├── alembic/
+├── src/
+│   ├── auth/
+│   │   ├── router.py         # 認証関連のエンドポイント
+│   │   ├── schemas.py        # Pydanticモデル
+│   │   ├── models.py         # データベースモデル
+│   │   ├── dependencies.py   # ルーター依存関係
+│   │   ├── service.py        # ビジネスロジック
+│   │   ├── config.py         # モジュール固有設定
+│   │   ├── constants.py      # 定数・エラーコード
+│   │   ├── exceptions.py     # モジュール固有例外
+│   │   └── utils.py          # ユーティリティ関数
+│   ├── news/
+│   │   ├── router.py         # ニュース関連エンドポイント
+│   │   ├── schemas.py
+│   │   ├── models.py
+│   │   ├── dependencies.py
+│   │   ├── service.py
+│   │   ├── constants.py
+│   │   ├── exceptions.py
+│   │   └── utils.py
+│   ├── users/
+│   │   ├── router.py         # ユーザー管理エンドポイント
+│   │   ├── schemas.py
+│   │   ├── models.py
+│   │   ├── dependencies.py
+│   │   ├── service.py
+│   │   ├── constants.py
+│   │   ├── exceptions.py
+│   │   └── utils.py
+│   ├── external_services/
+│   │   ├── openai/
+│   │   │   ├── client.py     # OpenAI API クライアント
+│   │   │   ├── schemas.py
+│   │   │   ├── config.py
+│   │   │   ├── constants.py
+│   │   │   ├── exceptions.py
+│   │   │   └── utils.py
+│   │   └── news_sources/
+│   │       ├── client.py     # ニュースソース API クライアント
+│   │       ├── schemas.py
+│   │       ├── config.py
+│   │       ├── constants.py
+│   │       ├── exceptions.py
+│   │       └── utils.py
+│   ├── core/
+│   │   ├── __init__.py
+│   │   ├── config.py         # グローバル設定
+│   │   ├── security.py       # セキュリティ関連
+│   │   ├── database.py       # DB接続設定
+│   │   ├── exceptions.py     # グローバル例外
+│   │   ├── dependencies.py   # グローバル依存関係
+│   │   └── middleware.py     # ミドルウェア設定
+│   ├── shared/
+│   │   ├── __init__.py
+│   │   ├── pagination.py     # ページネーション
+│   │   ├── response.py       # 共通レスポンス
+│   │   ├── validators.py     # 共通バリデーター
+│   │   └── utils.py          # 共通ユーティリティ
+│   └── main.py               # FastAPIアプリケーション初期化
+├── tests/
+│   ├── auth/
+│   ├── news/
+│   ├── users/
+│   ├── external_services/
+│   ├── conftest.py
+│   └── test_main.py
+├── scripts/
+│   ├── start.py              # 開発サーバー起動
+│   ├── migrate.py            # マイグレーション実行
+│   └── seed.py               # テストデータ投入
+├── requirements/
+│   ├── base.txt              # 本番用依存関係
+│   ├── dev.txt               # 開発用依存関係
+│   └── test.txt              # テスト用依存関係
+├── pyproject.toml
+├── alembic.ini
+├── .env.example
+├── .gitignore
+└── README.md
+```
+
+### 構造の利点
+
+1. **ドメイン駆動設計（DDD）**: 各モジュールが独立したドメインを表現
+2. **スケーラビリティ**: 新機能追加時の影響範囲を限定
+3. **保守性**: 関連するコードが同一モジュール内に集約
+4. **テスタビリティ**: モジュール単位でのテストが容易
+5. **チーム開発**: 機能別の並行開発が可能
+
+### モジュール間の依存関係
+
+```python
+# 明示的なモジュール名でのインポート
+from src.auth import constants as auth_constants
+from src.news import service as news_service
+from src.users.constants import ErrorCode as UsersErrorCode
+```
+
+## 代替構造（小規模プロジェクト向け）
+
+小規模プロジェクトやマイクロサービスの場合は、従来の**ファイルタイプベース構造**も有効：
+
 ```
 project/
-├── src/
-│   └── package_name/
-│       ├── __init__.py
-│       ├── main.py
-│       └── modules/
-├── tests/
-├── docs/
+├── app/
+│   ├── __init__.py
+│   ├── main.py
+│   ├── api/
+│   │   ├── v1/
+│   │   │   └── endpoints/
+│   │   └── dependencies/
+│   ├── core/
+│   ├── db/
+│   ├── schemas/
+│   ├── services/
+│   └── tests/
+├── docker/
 ├── pyproject.toml
-├── README.md
-└── .gitignore
+└── requirements.txt
 ```
 
-## コーディング規約
+## Dockerfile（マルチステージビルド）
 
-### Python バージョン
-- Python 3.9以上を使用（可能であれば3.11以上を推奨）
-- `pyproject.toml`で`requires-python = ">=3.9"`を指定
+```dockerfile
+# Python ベースイメージ
+FROM python:3.12-slim as base
 
-### 型ヒント（Type Hints）
-- **必須**: すべての関数、メソッド、クラス属性に型ヒントを付ける
-- `from typing import`を使用し、Python 3.9+では組み込み型（`list[str]`など）を優先
-- `Optional[T]`よりも`T | None`を使用（Python 3.10+）
-- 複雑な型は`TypeAlias`または`TypeVar`を使用
-- `mypy`での静的型チェックを必須とする
+# システムの依存関係をインストール
+RUN apt-get update && apt-get install -y \
+    gcc \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-### フォーマッティングとリンティング
-- **Black**: コードフォーマッター（line-length=88）
-- **Ruff**: 高速なリンター・フォーマッター（flake8、isort、pylintの代替）
-- **mypy**: 静的型チェック
-- **pre-commit**: コミット前の自動チェック
+WORKDIR /app
 
-#### pyproject.tomlの設定例
+# 本番用依存関係ステージ
+FROM base AS prod-deps
+COPY pyproject.toml ./
+COPY requirements/base.txt ./requirements/
+RUN pip install --no-cache-dir -r requirements/base.txt
+
+# 開発用依存関係ステージ
+FROM base AS dev-deps
+COPY pyproject.toml ./
+COPY requirements/ ./requirements/
+RUN pip install --no-cache-dir -r requirements/dev.txt
+
+# 開発用アプリケーションサーバー
+FROM dev-deps AS dev-server
+WORKDIR /app
+COPY . .
+EXPOSE 8000
+ENV PYTHONPATH=/app
+# ホットリロード有効でFastAPI起動
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/src"]
+
+# 開発用コマンド実行環境
+FROM dev-deps AS dev-cli
+WORKDIR /app
+COPY . .
+ENV PYTHONPATH=/app
+# 開発ツールを追加インストール
+RUN pip install --no-cache-dir ipython jupyter
+# デフォルトは対話モードで起動
+CMD ["bash"]
+
+# テスト実行環境
+FROM dev-deps AS test
+WORKDIR /app
+COPY . .
+ENV PYTHONPATH=/app
+ENV ENVIRONMENT=testing
+CMD ["pytest", "-v", "--cov=src", "--cov-report=html", "--cov-report=term"]
+
+# 本番用コンテナ
+FROM prod-deps AS production
+WORKDIR /app
+COPY src/ ./src/
+COPY alembic/ ./alembic/
+COPY alembic.ini ./
+COPY scripts/ ./scripts/
+
+# 非rootユーザーを作成
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+RUN chown -R appuser:appuser /app
+USER appuser
+
+EXPOSE 8000
+ENV PYTHONPATH=/app
+ENV ENVIRONMENT=production
+# Gunicorn + Uvicorn workers で本番起動
+CMD ["gunicorn", "src.main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000"]
+```
+
+## pyproject.toml（2024-2025年版）
+
 ```toml
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fastapi-app"
+version = "1.0.0"
+description = "FastAPI application with modern project structure"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"},
+]
+keywords = ["fastapi", "docker", "web", "api", "async"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Framework :: FastAPI",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+]
+
+# 本番用依存関係
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.27.0",
+    "pydantic>=2.6.0",
+    "pydantic-settings>=2.2.0",
+    "sqlalchemy>=2.0.25",
+    "psycopg2-binary>=2.9.9",
+    "alembic>=1.13.1",
+    "redis>=5.0.1",
+    "python-multipart>=0.0.9",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "celery>=5.3.6",
+    "gunicorn>=21.2.0",
+    "httpx>=0.27.0",
+]
+
+# オプショナル依存関係
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.3.0",
+    "black>=24.0.0",
+    "mypy>=1.8.0",
+    "pre-commit>=3.6.0",
+    "ipython>=8.21.0",
+    "jupyter>=1.0.0",
+    "flower>=2.0.1",
+    "types-redis>=4.6.0",
+    "types-passlib>=1.7.7",
+]
+test = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "factory-boy>=3.3.0",
+    "httpx>=0.27.0",
+    "pytest-xdist>=3.5.0",
+]
+docs = [
+    "mkdocs>=1.5.3",
+    "mkdocs-material>=9.5.0",
+    "mkdocstrings[python]>=0.24.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/fastapi-app"
+Documentation = "https://github.com/yourusername/fastapi-app#readme"
+Repository = "https://github.com/yourusername/fastapi-app"
+Issues = "https://github.com/yourusername/fastapi-app/issues"
+
+[project.scripts]
+dev-server = "scripts.start:run_dev_server"
+prod-server = "scripts.start:run_prod_server"
+migrate = "scripts.migrate:run_migrations"
+
+# ツール設定
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "SIM", # flake8-simplify
+    "TCH", # flake8-type-checking
+    "N",   # pep8-naming
+]
+ignore = [
+    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
+]
+exclude = [
+    ".git",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".venv",
+    "__pycache__",
+    "alembic/versions",
+]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/**/*" = ["B011", "S101"]
+"scripts/**/*" = ["T201"]
+
+[tool.ruff.isort]
+known-first-party = ["src"]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+
 [tool.black]
 line-length = 88
-target-version = ['py39']
-
-[tool.ruff]
-line-length = 88
-target-version = "py39"
-select = ["E", "F", "I", "N", "W", "UP", "B", "C4", "SIM", "TCH"]
+target-version = ['py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+  | alembic/versions
+)/
+'''
 
 [tool.mypy]
-python_version = "3.9"
-strict = true
-warn_return_any = true
-warn_unused_configs = true
+python_version = "3.12"
+check_untyped_defs = true
+disallow_any_generics = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unreachable = true
+strict_equality = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = [
+    "celery.*",
+    "redis.*",
+    "psycopg2.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--disable-warnings",
+    "-v",
+    "--tb=short",
+]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["src"]
+omit = [
+    "*/tests/*",
+    "*/venv/*",
+    "*/.venv/*",
+    "*/alembic/*",
+    "*/scripts/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "@abstract",
+    "if TYPE_CHECKING:",
+]
+show_missing = true
+precision = 2
+
+[tool.bandit]
+exclude_dirs = ["tests", "venv", ".venv", "alembic"]
+skips = ["B101", "B601"]
 ```
 
-## コーディング慣例
+## requirements分離管理
 
-### 関数とクラス設計
-- **単一責任原則**: 1つの関数は1つのことだけを行う
-- **純粋関数**: 可能な限り副作用のない関数を書く
-- **型安全性**: `Any`型の使用を避け、具体的な型を指定
-- **dataclasses**または**Pydantic**を使用してデータ構造を定義
-- **Enum**を使用して定数をグループ化
-
-### エラーハンドリング
-- 具体的な例外クラスを作成・使用する
-- `except Exception:`のような広範囲なキャッチを避ける
-- コンテキストマネージャー（`with`文）を適切に使用
-- `logging`モジュールを使用してエラーログを記録
-
-### 非同期プログラミング
-- `async`/`await`を使用する場合は一貫して適用
-- `asyncio.run()`でエントリーポイントを実行
-- `aiohttp`、`httpx`などの非同期対応ライブラリを使用
-- デッドロックを避けるため`asyncio.gather()`を適切に使用
-
-## テストとドキュメント
-
-### テスト
-- **pytest**を使用したテストフレームワーク
-- テストカバレッジ80%以上を目標
-- `conftest.py`でフィクスチャを管理
-- `pytest-cov`でカバレッジ測定
-- `pytest-mock`でモッキング
-- テスト関数名は`test_機能_条件_期待結果`の形式
-
-### ドキュメント
-- **docstring**: 全ての公開関数、クラス、モジュールに記述
-- **Google style**または**NumPy style**のdocstringを使用
-- `README.md`にプロジェクトの概要、インストール方法、使用例を記載
-- **Sphinx**または**MkDocs**を使用した自動ドキュメント生成
-
-## パフォーマンスとセキュリティ
-
-### パフォーマンス
-- **プロファイリング**: `cProfile`、`line_profiler`を使用
-- **適切なデータ構造**: リスト内包表記、ジェネレータ、`collections`モジュールの活用
-- **キャッシング**: `functools.lru_cache`、`functools.cache`の使用
-- **並行処理**: `concurrent.futures`、`multiprocessing`の適切な使用
-
-### セキュリティ
-- **bandit**でセキュリティ脆弱性をチェック
-- **secrets**モジュールを使用してパスワード・トークン生成
-- 環境変数で機密情報を管理（`.env`ファイル + `python-dotenv`）
-- SQLインジェクション対策（パラメータ化クエリ）
-
-## 依存関係とライブラリ推奨
-
-### コア開発ツール
-```toml
-[tool.poetry.group.dev.dependencies]
-black = "^23.0.0"
-ruff = "^0.1.0"
-mypy = "^1.7.0"
-pytest = "^7.4.0"
-pytest-cov = "^4.1.0"
-pre-commit = "^3.5.0"
+### requirements/base.txt
+```txt
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.6.0
+pydantic-settings>=2.2.0
+sqlalchemy>=2.0.25
+psycopg2-binary>=2.9.9
+alembic>=1.13.1
+redis>=5.0.1
+python-multipart>=0.0.9
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+celery>=5.3.6
+gunicorn>=21.2.0
+httpx>=0.27.0
 ```
 
-### 推奨ライブラリ
-- **HTTP**: `httpx`（同期・非同期対応）
-- **データ検証**: `pydantic`
-- **CLI**: `typer`または`click`
-- **設定管理**: `pydantic-settings`
-- **ログ**: `structlog`
-- **日時**: `pendulum`
-- **データ操作**: `pandas`、`polars`
+### requirements/dev.txt
+```txt
+-r base.txt
+ruff>=0.3.0
+black>=24.0.0
+mypy>=1.8.0
+pre-commit>=3.6.0
+ipython>=8.21.0
+jupyter>=1.0.0
+flower>=2.0.1
+types-redis>=4.6.0
+types-passlib>=1.7.7
+```
 
-## CI/CDとDevOps
+### requirements/test.txt
+```txt
+-r base.txt
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0
+pytest-mock>=3.12.0
+factory-boy>=3.3.0
+httpx>=0.27.0
+pytest-xdist>=3.5.0
+```
 
-### GitHub Actions設定例
-- Python複数バージョンでのテスト実行
-- `ruff`、`black`、`mypy`の自動チェック
-- テストカバレッジレポート
-- 自動デプロイメント（PyPI、Docker）
+## docker-compose.yml（ベース設定）
 
-### Docker
-- **multi-stage build**を使用
-- **Python slim**イメージをベースに使用
-- **poetry**または**uv**を使用した依存関係インストール
-- **non-root user**での実行
+```yaml
+version: '3.8'
 
-## コード品質チェックリスト
+services:
+  # PostgreSQL データベース
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-fastapi_app}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-### コミット前確認事項
-- [ ] 型ヒントが全ての関数に付いている
-- [ ] `mypy`エラーがない
-- [ ] `ruff`リンターエラーがない
-- [ ] テストが全て通る
-- [ ] カバレッジが80%以上
-- [ ] docstringが公開APIに記述されている
-- [ ] セキュリティチェック（bandit）を通過
+  # Redis（キャッシュ・セッション・Celery用）
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-### コードレビュー観点
-- 単一責任原則の遵守
-- エラーハンドリングの適切性
-- テストの網羅性
-- 型安全性
-- パフォーマンスへの配慮
-- セキュリティリスクの確認
+volumes:
+  db_data:
 
-## Agent Coding 特有の注意点
+networks:
+  default:
+    name: fastapi_network
+```
 
-### Cursor Agentとの協働
-- コード生成時は必ず型ヒントを含める
-- 生成されたコードは即座にリンター・フォーマッターを実行
-- テストコードも同時生成を依頼
-- 複雑なロジックには適切なコメントを含める
-- エラーハンドリングの実装を忘れない
+## docker-compose.dev.yml（開発環境オーバーライド）
 
-### 品質保証
-- Agent生成コードも手動レビューを実施
-- 既存コードベースとの整合性確認
-- セキュリティ観点での検証
-- パフォーマンステストの実施
+```yaml
+version: '3.8'
 
-## mypy型エラー解消のためのテスト用Mockクラス・lambdaの型ヒント付与ガイド
+services:
+  # 開発用FastAPIサーバー
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: dev-server
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src:/app/src:ro
+      - ./tests:/app/tests:ro
+      - ./alembic:/app/alembic:ro
+      - ./alembic.ini:/app/alembic.ini:ro
+      - ./scripts:/app/scripts:ro
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=True
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-fastapi_app}
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
-### 背景
-pytest等のテストコードで、mypyによる「Function is missing a return type annotation」や「Unused 'type: ignore' comment」エラーが発生することがあります。  
-特に、テスト内で定義するMockクラスやlambda式に型ヒントが不足している場合に多発します。
+  # 開発用コマンド実行コンテナ
+  cli:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: dev-cli
+    volumes:
+      - .:/app
+      - pip_cache:/root/.cache/pip
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-fastapi_app}
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles:
+      - cli
+    stdin_open: true
+    tty: true
 
-### ベストプラクティス
+  # テスト実行コンテナ
+  test:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: test
+    volumes:
+      - .:/app
+      - pip_cache:/root/.cache/pip
+    environment:
+      - ENVIRONMENT=testing
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@db-test:5432/${DB_NAME:-fastapi_app}_test
+      - REDIS_URL=redis://redis:6379/1
+      - SECRET_KEY=test-secret-key
+    depends_on:
+      - db-test
+    profiles:
+      - test
 
-#### 1. Mockクラスの`__init__`やメソッドに型ヒントを必ず付与する
+  # テスト用データベース
+  db-test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-fastapi_app}_test
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+    profiles:
+      - test
+    tmpfs:
+      - /var/lib/postgresql/data
 
-**例:**
+  # Celeryワーカー（バックグラウンドタスク用）
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: dev-server
+    volumes:
+      - ./src:/app/src:ro
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-password}@db:5432/${DB_NAME:-fastapi_app}
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles:
+      - worker
+    command: ["celery", "-A", "src.core.celery", "worker", "--loglevel=info"]
+
+  # Celery Flower（タスク監視UI）
+  flower:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: dev-cli
+    ports:
+      - "5555:5555"
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+    profiles:
+      - flower
+    command: ["celery", "-A", "src.core.celery", "flower", "--port=5555"]
+
+  # pgAdmin（データベース管理UI）
+  pgadmin:
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    profiles:
+      - pgadmin
+
+volumes:
+  pip_cache:
+```
+
+## docker-compose.prod.yml（本番環境用）
+
+```yaml
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: production
+    ports:
+      - "80:8000"
+    environment:
+      - ENVIRONMENT=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - SECRET_KEY=${SECRET_KEY}
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # 本番環境では外部のマネージドサービスを使用
+  # db, redis サービスは削除またはコメントアウト
+```
+
+## FastAPI アプリケーション例（モジュール機能ベース）
+
+### src/main.py
+
 ```python
-class MockResponse:
-    def __init__(self) -> None:
-        self.content = b"<html>test</html>"
-        self.headers = {"Content-Type": "text/html"}
-    def raise_for_status(self) -> None:
-        pass
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from src.core.config import settings
+from src.core.middleware import setup_middleware
+from src.auth.router import router as auth_router
+from src.news.router import router as news_router
+from src.users.router import router as users_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """アプリケーションのライフサイクル管理"""
+    # 起動時の処理
+    print(f"Starting {settings.PROJECT_NAME} v{settings.VERSION}")
+    yield
+    # 終了時の処理
+    print("Shutting down...")
+
+
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    version=settings.VERSION,
+    description=settings.DESCRIPTION,
+    debug=settings.DEBUG,
+    lifespan=lifespan,
+    openapi_url="/api/v1/openapi.json" if settings.DEBUG else None,
+)
+
+# ミドルウェア設定
+setup_middleware(app)
+
+# CORS設定
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.ALLOWED_HOSTS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ルーター登録
+app.include_router(
+    auth_router, 
+    prefix="/api/v1/auth", 
+    tags=["認証"]
+)
+app.include_router(
+    news_router, 
+    prefix="/api/v1/news", 
+    tags=["ニュース"]
+)
+app.include_router(
+    users_router, 
+    prefix="/api/v1/users", 
+    tags=["ユーザー"]
+)
+
+
+@app.get("/")
+async def root():
+    """ルートエンドポイント"""
+    return {
+        "message": f"{settings.PROJECT_NAME} is running!",
+        "version": settings.VERSION,
+        "environment": settings.ENVIRONMENT
+    }
+
+
+@app.get("/health")
+async def health_check():
+    """ヘルスチェックエンドポイント"""
+    return {
+        "status": "healthy",
+        "environment": settings.ENVIRONMENT,
+        "version": settings.VERSION
+    }
 ```
 
-#### 2. lambda式の`type: ignore`は型ヒント追加後に削除する
+### src/core/config.py
 
-**Before:**
 ```python
-monkeypatch.setattr("requests.get", lambda url, timeout=10: MockResponse())  # type: ignore
+from functools import lru_cache
+from typing import List, Optional
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True
+    )
+    
+    # アプリケーション設定
+    PROJECT_NAME: str = "FastAPI News Assistant"
+    VERSION: str = "1.0.0"
+    DESCRIPTION: str = "Modern FastAPI application with modular structure"
+    ENVIRONMENT: str = Field(default="development")
+    DEBUG: bool = Field(default=True)
+    
+    # データベース設定
+    DATABASE_URL: str = Field(
+        default="sqlite:///./data/app.db",
+        description="Database connection URL"
+    )
+    
+    # Redis設定
+    REDIS_URL: str = Field(
+        default="redis://localhost:6379/0",
+        description="Redis connection URL"
+    )
+    
+    # セキュリティ設定
+    SECRET_KEY: str = Field(
+        default="your-secret-key-here-change-in-production",
+        description="Secret key for JWT tokens"
+    )
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    
+    # CORS設定
+    ALLOWED_HOSTS: List[str] = Field(
+        default=["*"],
+        description="Allowed hosts for CORS"
+    )
+    
+    # 外部API設定
+    OPENAI_API_KEY: Optional[str] = Field(
+        default=None,
+        description="OpenAI API key"
+    )
+    
+    # ログ設定
+    LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+
+@lru_cache()
+def get_settings() -> Settings:
+    """設定のシングルトンインスタンスを取得"""
+    return Settings()
+
+
+settings = get_settings()
 ```
-**After:**
+
+### src/core/database.py
+
 ```python
-monkeypatch.setattr("requests.get", lambda url, timeout=10: MockResponse())
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from src.core.config import settings
+
+# SQLiteの場合の特別な設定
+connect_args = {}
+if settings.DATABASE_URL.startswith("sqlite"):
+    connect_args = {
+        "check_same_thread": False,
+        "poolclass": StaticPool,
+    }
+
+engine = create_engine(
+    settings.DATABASE_URL,
+    connect_args=connect_args,
+    echo=settings.DEBUG
+)
+
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine
+)
+
+Base = declarative_base()
+
+
+def get_db():
+    """データベースセッションの依存関係"""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 ```
-Mockクラスやlambdaの型ヒントが正しく付与されていれば、`type: ignore`は不要です。
 
-#### 3. mypyで「Unused 'type: ignore' comment」エラーが出た場合
+### src/news/router.py
 
-- 不要になった`type: ignore`コメントは必ず削除する。
-- 型ヒント追加後は`mypy`を再実行し、エラーが消えることを確認する。
+```python
+from typing import List
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
-#### 4. テスト関数・fixture・setup/teardownにも型ヒントを徹底
+from src.core.database import get_db
+from src.news import service, schemas
+from src.news.dependencies import get_current_user
 
-- すべての関数・メソッド・fixture・内部クラス・lambdaに型ヒントを付与すること。
-- 型ヒント追加後は`mypy`と`pytest`の両方でエラーがないことを確認する。
+router = APIRouter()
 
-### まとめ
-- Mockクラスやlambdaにも型ヒントを必ず付与
-- 不要な`type: ignore`は削除
-- mypy/pytestでエラーがないことを常に確認
+
+@router.get("/", response_model=List[schemas.NewsResponse])
+async def get_news_list(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """ニュース一覧を取得"""
+    news_list = await service.get_news_list(db, skip=skip, limit=limit)
+    return news_list
+
+
+@router.post("/", response_model=schemas.NewsResponse)
+async def create_news(
+    news_data: schemas.NewsCreate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """新しいニュースを作成"""
+    return await service.create_news(db, news_data, current_user.id)
+
+
+@router.get("/{news_id}", response_model=schemas.NewsResponse)
+async def get_news(
+    news_id: int,
+    db: Session = Depends(get_db)
+):
+    """特定のニュースを取得"""
+    news = await service.get_news_by_id(db, news_id)
+    if not news:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="ニュースが見つかりません"
+        )
+    return news
+
+
+@router.put("/{news_id}", response_model=schemas.NewsResponse)
+async def update_news(
+    news_id: int,
+    news_data: schemas.NewsUpdate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """ニュースを更新"""
+    news = await service.update_news(db, news_id, news_data, current_user.id)
+    if not news:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="ニュースが見つかりません"
+        )
+    return news
+
+
+@router.delete("/{news_id}")
+async def delete_news(
+    news_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """ニュースを削除"""
+    success = await service.delete_news(db, news_id, current_user.id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="ニュースが見つかりません"
+        )
+    return {"message": "ニュースが削除されました"}
+```
+
+### scripts/start.py
+
+```python
+"""アプリケーション起動スクリプト"""
+import uvicorn
+from src.core.config import settings
+
+
+def run_dev_server():
+    """開発用サーバー起動"""
+    uvicorn.run(
+        "src.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        reload_dirs=["src"],
+        log_level=settings.LOG_LEVEL.lower()
+    )
+
+
+def run_prod_server():
+    """本番用サーバー起動"""
+    uvicorn.run(
+        "src.main:app",
+        host="0.0.0.0",
+        port=8000,
+        log_level="warning"
+    )
+
+
+if __name__ == "__main__":
+    run_dev_server()
+```
+
+## 使用方法
+
+### 開発環境の起動
+
+```bash
+# 基本的な開発環境（API + DB + Redis）
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+# バックグラウンドワーカーも含めて起動
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile worker up -d
+
+# 全サービス起動（管理UI含む）
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile worker --profile flower --profile pgadmin up -d
+```
+
+### コマンド実行
+
+```bash
+# 開発用CLIコンテナでシェル実行
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli bash
+
+# パッケージインストール（開発依存関係含む）
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli pip install -r requirements/dev.txt
+
+# 新しいパッケージ追加後の再インストール
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli pip install -r requirements/dev.txt --force-reinstall
+
+# データベースマイグレーション
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli alembic upgrade head
+
+# 新しいマイグレーション作成
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli alembic revision --autogenerate -m "Add new table"
+
+# テスト実行
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile test run --rm test
+
+# コードフォーマット・リンティング（Ruff使用）
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli ruff format src tests
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli ruff check src tests --fix
+
+# 型チェック
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli mypy src
+
+# pre-commitフック実行
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli pre-commit run --all-files
+
+# Jupyter Notebook起動
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm -p 8888:8888 cli jupyter notebook --ip=0.0.0.0 --allow-root
+
+# 開発サーバー起動（スクリプト使用）
+docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli python scripts/start.py
+```
+
+### 本番環境デプロイ
+
+```bash
+# 本番用イメージのビルド
+docker compose -f docker-compose.yml -f docker-compose.prod.yml build
+
+# 本番環境起動
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+## 環境変数設定
+
+### .env.example
+
+```bash
+# データベース設定
+DB_NAME=fastapi_app
+DB_USER=postgres
+DB_PASSWORD=password
+DB_HOST=localhost
+DB_PORT=5432
+
+# Redis設定
+REDIS_URL=redis://localhost:6379/0
+
+# アプリケーション設定
+ENVIRONMENT=development
+DEBUG=True
+SECRET_KEY=your-secret-key-here
+DATABASE_URL=postgresql://postgres:password@localhost:5432/fastapi_app
+
+# 外部API設定
+OPENAI_API_KEY=your-openai-api-key-here
+
+# ログ設定
+LOG_LEVEL=INFO
+
+# 本番環境用（本番では適切な値に設定）
+# DATABASE_URL=postgresql://user:password@prod-db-host:5432/prod_db
+# REDIS_URL=redis://prod-redis-host:6379/0
+```
+
+## アクセス先
+
+開発環境起動後、以下のURLでアクセス可能：
+
+- **FastAPI**: http://localhost:8000
+- **API ドキュメント**: http://localhost:8000/docs (Swagger UI)
+- **ReDoc**: http://localhost:8000/redoc
+- **OpenAPI JSON**: http://localhost:8000/api/v1/openapi.json
+- **pgAdmin**: http://localhost:5050 (プロファイル有効時)
+- **Flower**: http://localhost:5555 (プロファイル有効時)
+
+## ベストプラクティス（2024-2025年版）
+
+### 1. モジュール機能ベース設計
+- **ドメイン分離**: 各機能モジュールが独立したドメインを表現
+- **依存関係の明確化**: モジュール間の依存関係を明示的に管理
+- **テスト容易性**: モジュール単位でのテストが容易
+- **スケーラビリティ**: 新機能追加時の影響範囲を限定
+
+### 2. 現代的なツールチェーン
+- **Ruff**: 高速なリンター・フォーマッター（Black + isort + flake8の統合）
+- **Python 3.12**: 最新の型ヒント機能とパフォーマンス向上
+- **Pydantic v2**: 高速なデータ検証とシリアライゼーション
+- **FastAPI最新版**: 最新の非同期機能とOpenAPI 3.1サポート
+
+### 3. FastAPI固有の考慮事項
+- **ライフサイクル管理**: `lifespan`を使用したアプリケーション初期化・終了処理
+- **依存性注入**: Dependsを使用したクリーンなアーキテクチャ
+- **自動ドキュメント生成**: OpenAPI/Swagger の活用
+- **型安全性**: Pydanticモデルによるデータ検証
+- **非同期処理**: async/awaitの適切な使用
+
+### 4. パフォーマンス最適化
+- **Uvicornワーカー**: 開発時はホットリロード、本番時はGunicorn + Uvicorn
+- **接続プール**: SQLAlchemyのコネクションプール設定
+- **Redis活用**: キャッシュ・セッション・Celeryタスク管理
+- **設定キャッシュ**: `@lru_cache`による設定の効率的な管理
+
+### 5. 開発効率化
+- **ホットリロード**: コード変更の即座反映（src/ディレクトリ監視）
+- **テスト分離**: 専用テスト環境とデータベース
+- **コード品質**: Ruff, mypy による自動整形・検証
+- **型安全性**: 厳密な型チェック設定
+
+### 6. セキュリティ対策
+- **非rootユーザー**: 本番コンテナでの権限最小化
+- **環境変数管理**: 機密情報の安全な管理
+- **ヘルスチェック**: コンテナとアプリケーションの健全性監視
+- **CORS設定**: 適切なオリジン制限
+
+### 7. 運用監視
+- **構造化ログ**: JSON形式でのログ出力
+- **メトリクス**: Prometheus連携可能な設計
+- **バックグラウンドタスク**: Celeryによる非同期処理
+- **ヘルスチェック**: 詳細なアプリケーション状態監視
+
+## 2024-2025年の新機能・改善点
+
+### Ruffの採用
+- **統合ツール**: Black, isort, flake8, pyupgradeを統一
+- **高速処理**: Rustベースで従来ツールより10-100倍高速
+- **設定簡素化**: pyproject.tomlでの一元管理
+
+### Python 3.12の活用
+- **型ヒント改善**: より柔軟で表現力豊かな型システム
+- **パフォーマンス向上**: 15%程度の実行速度改善
+- **新機能**: f-string改善、エラーメッセージ向上
+
+### モジュール機能ベース構造
+- **従来の問題**: ファイルタイプベースでは大規模化時に管理困難
+- **解決策**: 機能単位でのモジュール分割
+- **利点**: 保守性、テスト容易性、チーム開発効率の向上
+
+## トラブルシューティング
+
+### よくある問題と解決方法
+
+1. **データベース接続エラー**
+   ```bash
+   # ヘルスチェック確認
+   docker compose -f docker-compose.yml -f docker-compose.dev.yml ps
+   # データベース接続テスト
+   docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli python -c "from src.core.database import engine; print('DB connection OK')"
+   ```
+
+2. **パッケージ依存関係の問題**
+   ```bash
+   # requirements再インストール
+   docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli pip install -r requirements/dev.txt --force-reinstall
+   ```
+
+3. **マイグレーションエラー**
+   ```bash
+   # マイグレーション状態確認
+   docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli alembic current
+   # マイグレーション履歴確認
+   docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli alembic history
+   ```
+
+4. **Redis接続問題**
+   ```bash
+   # Redis接続テスト
+   docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli python -c "import redis; r=redis.from_url('redis://redis:6379/0'); print(r.ping())"
+   ```
+
+5. **Ruff設定問題**
+   ```bash
+   # Ruff設定検証
+   docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm cli ruff check --show-settings
+   ```
+
+このガイドに従うことで、2024-2025年の最新ベストプラクティスに基づいたFastAPIアプリケーションの開発環境を構築できます。
