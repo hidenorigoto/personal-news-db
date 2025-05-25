@@ -1,4 +1,6 @@
 """News Assistant API - メインアプリケーション（新構造版）"""
+import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from .articles import router as articles_router
@@ -8,16 +10,25 @@ from .articles.models import Article  # noqa: F401
 from .core import create_tables, settings
 from .health import router as health_router
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # アプリケーション開始時
+    if os.getenv('APP_ENV') != 'production':
+        create_tables()
+    
+    yield
+
+
 # アプリケーション初期化
 app = FastAPI(
     title=settings.app_name,
     version=settings.version,
     debug=settings.debug,
     description="AI-powered news collection and summarization service",
+    lifespan=lifespan,
 )
 
-# データベーステーブル作成
-create_tables()
 
 # ルーター登録
 app.include_router(health_router, tags=["health"])
