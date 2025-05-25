@@ -1,10 +1,9 @@
 """記事関連のAPIエンドポイント"""
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from ..core import get_db, DatabaseError, ArticleNotFoundError
-from .schemas import ArticleCreate, ArticleUpdate, ArticleResponse, ArticleList
+from ..core import ArticleNotFoundError, DatabaseError, get_db
+from .schemas import ArticleCreate, ArticleList, ArticleResponse, ArticleUpdate
 from .service import ArticleService
 
 router = APIRouter()
@@ -17,7 +16,9 @@ async def create_article(
 ) -> ArticleResponse:
     """記事を新規作成"""
     try:
-        db_article = ArticleService.create_article(db, article)
+        # コンテンツ処理（要約生成含む）を実行
+        service = ArticleService()
+        db_article = service.create_article_with_processing(db, article)
         return ArticleResponse.model_validate(db_article)
     except DatabaseError as e:
         if e.error_code == "DUPLICATE_URL":
@@ -102,4 +103,4 @@ async def delete_article(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=e.message
-        ) from e 
+        ) from e

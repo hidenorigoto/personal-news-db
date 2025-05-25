@@ -1,6 +1,5 @@
 """記事関連のPydanticスキーマ"""
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
@@ -9,7 +8,7 @@ class ArticleBase(BaseModel):
     """記事の基本スキーマ"""
     url: HttpUrl = Field(..., description="記事のURL")
     title: str = Field(..., min_length=1, max_length=500, description="記事のタイトル")
-    summary: Optional[str] = Field(None, max_length=2000, description="記事の要約")
+    summary: str | None = Field(None, max_length=2000, description="記事の要約")
 
 
 class ArticleCreate(ArticleBase):
@@ -19,15 +18,15 @@ class ArticleCreate(ArticleBase):
 
 class ArticleUpdate(BaseModel):
     """記事更新用スキーマ"""
-    title: Optional[str] = Field(None, min_length=1, max_length=500, description="記事のタイトル")
-    summary: Optional[str] = Field(None, max_length=2000, description="記事の要約")
+    title: str | None = Field(None, min_length=1, max_length=500, description="記事のタイトル")
+    summary: str | None = Field(None, max_length=2000, description="記事の要約")
 
 
 class ArticleResponse(ArticleBase):
     """記事レスポンス用スキーマ"""
     id: int = Field(..., description="記事ID")
     created_at: datetime = Field(..., description="作成日時")
-    updated_at: Optional[datetime] = Field(None, description="更新日時")
+    updated_at: datetime | None = Field(None, description="更新日時")
 
     model_config = ConfigDict(from_attributes=True)
 

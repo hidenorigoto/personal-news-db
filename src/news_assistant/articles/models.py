@@ -17,4 +17,4 @@ class Article(Base):  # type: ignore[misc]
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     def __repr__(self) -> str:
-        return f"<Article(id={self.id}, title='{self.title[:50]}...')>" 
+        return f"<Article(id={self.id}, title='{self.title[:50]}...')>"
