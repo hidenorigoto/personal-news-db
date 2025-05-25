@@ -62,6 +62,7 @@ coverage.xml
 # dotenv
 .env
 .env.*
+!.env.example
 
 # poetry
 poetry.lock
