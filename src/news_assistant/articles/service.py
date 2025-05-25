@@ -19,29 +19,8 @@ class ArticleService:
         """
         self.content_processor = ContentProcessor(data_dir)
 
-    @staticmethod
-    def create_article_simple(db: Session, article_data: ArticleCreate) -> Article:
-        """記事を作成（コンテンツ処理なし）"""
-        try:
-            db_article = Article(
-                url=str(article_data.url),
-                title=article_data.title,
-                summary=article_data.summary or "",
-            )
-            db.add(db_article)
-            db.commit()
-            db.refresh(db_article)
-            return db_article
-        except IntegrityError as e:
-            db.rollback()
-            raise DatabaseError(
-                "記事の作成に失敗しました。URLが既に登録されている可能性があります。",
-                error_code="DUPLICATE_URL",
-                details={"url": str(article_data.url)},
-            ) from e
-
-    def create_article_with_processing(self, db: Session, article_data: ArticleCreate) -> Article:
-        """記事を作成（コンテンツ処理あり）"""
+    def create_article(self, db: Session, article_data: ArticleCreate) -> Article:
+        """記事を作成"""
         try:
             # まず記事をDBに保存（IDを取得するため）
             db_article = Article(
@@ -85,11 +64,6 @@ class ArticleService:
                 error_code="DUPLICATE_URL",
                 details={"url": str(article_data.url)},
             ) from e
-
-    @staticmethod
-    def create_article(db: Session, article_data: ArticleCreate) -> Article:
-        """記事を作成（デフォルト：コンテンツ処理なし）"""
-        return ArticleService.create_article_simple(db, article_data)
 
     @staticmethod
     def get_article_by_id(db: Session, article_id: int) -> Article:
