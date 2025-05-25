@@ -294,22 +294,46 @@ docker compose logs -f app-dev
 
 ### 開発時のベストプラクティス
 
-1. **依存関係追加時**:
+1. **pyproject.toml修正時の必須手順**:
+   ```bash
+   # 依存関係、ツール設定、メタデータ等を変更した場合は必ずリビルド
+   docker compose down
+   docker compose build --no-cache
+   docker compose up -d
+   
+   # 設定変更の確認
+   docker compose run --rm poetry poetry show  # 依存関係確認
+   docker compose run --rm poetry poetry run mypy --version  # ツール確認
+   ```
+
+2. **依存関係追加時**:
    ```bash
    # pyproject.toml更新後は必ずリビルド
    docker compose build --no-cache
    ```
 
-2. **テスト実行**:
+3. **テスト実行**:
    ```bash
    # 必ずtest専用コンテナを使用
    docker compose run --rm test pytest
    ```
 
-3. **コード品質チェック**:
+4. **コード品質チェック**:
    ```bash
    # コミット前に必ず実行
    docker compose run --rm test poetry run ruff check news_assistant --fix
    docker compose run --rm test poetry run mypy news_assistant
    docker compose run --rm test pytest -v
+   
+   # または一括実行
+   make all
+   ```
+
+5. **設定変更時のトラブルシューティング**:
+   ```bash
+   # MyPy設定変更後にキャッシュクリア
+   docker compose run --rm poetry rm -rf .mypy_cache
+   
+   # Ruff設定変更後の確認
+   docker compose run --rm poetry poetry run ruff check --show-settings
    ```
