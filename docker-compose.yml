@@ -40,6 +40,7 @@ services:
       - ./poetry.lock:/app/poetry.lock
     environment:
       - NEWS_ASSISTANT_DB_URL=sqlite:///./data/news.db
+      - PYTHONPATH=/app
 
   poetry:
     build: .
