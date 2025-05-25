@@ -1,9 +1,9 @@
 """AI機能関連の例外クラス"""
 
-from ..core.exceptions import NewsAssistantException
+from ..core.exceptions import NewsAssistantError
 
 
-class AIServiceError(NewsAssistantException):
+class AIServiceError(NewsAssistantError):
     """AI サービス基底例外"""
     pass
 
@@ -30,4 +30,4 @@ class AIQuotaExceededError(AIServiceError):
 
 class AIRateLimitError(AIServiceError):
     """AI API レート制限エラー"""
-    pass 
+    pass

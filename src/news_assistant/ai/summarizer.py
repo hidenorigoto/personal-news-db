@@ -1,42 +1,36 @@
 """要約サービス統合クラス"""
-import os
 import logging
-from typing import Optional, Dict, Any
+import os
+from typing import Any
 
-from ..core import settings
-from .schemas import (
-    AIConfig, 
-    SummaryRequest, 
-    SummaryResponse, 
-    AIProviderType, 
-    SummaryStyle
-)
-from .providers import AIProvider, OpenAIProvider, MockAIProvider
 from .exceptions import AIConfigurationError, SummaryGenerationError
+from .providers import AIProvider, MockAIProvider, OpenAIProvider
+from .schemas import AIConfig, AIProviderType, SummaryRequest, SummaryResponse, SummaryStyle
 
 logger = logging.getLogger(__name__)
 
 
 class SummarizerService:
     """要約サービス統合クラス"""
-    
-    def __init__(self, config: Optional[AIConfig] = None):
+
+    def __init__(self, config: AIConfig | None = None):
         """
         Args:
             config: AI設定（Noneの場合は環境変数から自動設定）
         """
         self.config = config or self._create_default_config()
         self.provider = self._create_provider()
-    
+
     def _create_default_config(self) -> AIConfig:
         """環境変数からデフォルト設定を作成"""
         api_key = os.environ.get("OPENAI_API_KEY")
-        
+
         if api_key:
             return AIConfig(
                 provider=AIProviderType.OPENAI,
                 model_name="gpt-3.5-turbo",
                 api_key=api_key,
+                base_url=None,
                 max_tokens=1000,
                 temperature=0.3,
                 timeout=30
@@ -47,11 +41,13 @@ class SummarizerService:
             return AIConfig(
                 provider=AIProviderType.LOCAL,
                 model_name="mock-model",
+                api_key=None,
+                base_url=None,
                 max_tokens=1000,
                 temperature=0.3,
                 timeout=30
             )
-    
+
     def _create_provider(self) -> AIProvider:
         """設定に基づいてプロバイダーを作成"""
         if self.config.provider == AIProviderType.OPENAI:
@@ -63,27 +59,27 @@ class SummarizerService:
                 f"Unsupported provider: {self.config.provider}",
                 error_code="UNSUPPORTED_PROVIDER"
             )
-    
+
     def generate_summary(
         self,
         content: str,
         style: SummaryStyle = SummaryStyle.CONCISE,
-        max_length: Optional[int] = None,
+        max_length: int | None = None,
         language: str = "ja",
-        custom_prompt: Optional[str] = None
+        custom_prompt: str | None = None
     ) -> SummaryResponse:
         """要約を生成
-        
+
         Args:
             content: 要約対象のテキスト
             style: 要約スタイル
             max_length: 最大文字数
             language: 言語
             custom_prompt: カスタムプロンプト
-            
+
         Returns:
             要約レスポンス
-            
+
         Raises:
             SummaryGenerationError: 要約生成に失敗した場合
         """
@@ -92,7 +88,7 @@ class SummarizerService:
                 "Content cannot be empty",
                 error_code="EMPTY_CONTENT"
             )
-        
+
         request = SummaryRequest(
             content=content,
             style=style,
@@ -100,22 +96,22 @@ class SummarizerService:
             language=language,
             custom_prompt=custom_prompt
         )
-        
+
         try:
             return self.provider.generate_summary(request)
         except Exception as e:
             logger.error(f"Summary generation failed: {e}")
             raise
-    
+
     def generate_simple_summary(self, content: str) -> str:
         """シンプルな要約生成（後方互換性のため）
-        
+
         Args:
             content: 要約対象のテキスト
-            
+
         Returns:
             要約テキスト
-            
+
         Raises:
             SummaryGenerationError: 要約生成に失敗した場合
         """
@@ -128,7 +124,7 @@ class SummarizerService:
                 f"Summary generation failed: {e}",
                 error_code="SIMPLE_GENERATION_FAILED"
             ) from e
-    
+
     def test_connection(self) -> bool:
         """AI プロバイダーへの接続をテスト"""
         try:
@@ -136,8 +132,8 @@ class SummarizerService:
         except Exception as e:
             logger.warning(f"Connection test failed: {e}")
             return False
-    
-    def get_provider_info(self) -> Dict[str, Any]:
+
+    def get_provider_info(self) -> dict[str, Any]:
         """プロバイダー情報を取得"""
         return {
             "provider": self.config.provider.value,
@@ -146,7 +142,7 @@ class SummarizerService:
             "temperature": self.config.temperature,
             "connection_status": self.test_connection()
         }
-    
+
     def update_config(self, config: AIConfig) -> None:
         """設定を更新してプロバイダーを再作成"""
         self.config = config
@@ -155,7 +151,7 @@ class SummarizerService:
 
 
 # グローバルインスタンス（後方互換性のため）
-_default_summarizer: Optional[SummarizerService] = None
+_default_summarizer: SummarizerService | None = None
 
 
 def get_default_summarizer() -> SummarizerService:
@@ -168,17 +164,17 @@ def get_default_summarizer() -> SummarizerService:
 
 def generate_summary(content: str, model: str = "gpt-3.5-turbo", max_tokens: int = 900) -> str:
     """後方互換性のための要約生成関数
-    
+
     Args:
         content: 要約対象のテキスト
         model: モデル名（互換性のため、実際は使用されない）
         max_tokens: 最大トークン数（互換性のため、実際は使用されない）
-        
+
     Returns:
         要約テキスト
-        
+
     Raises:
         SummaryGenerationError: 要約生成に失敗した場合
     """
     summarizer = get_default_summarizer()
-    return summarizer.generate_simple_summary(content) 
+    return summarizer.generate_simple_summary(content)
