@@ -1,4 +1,5 @@
 """コンテンツ抽出機能"""
+import contextlib
 import io
 import logging
 from urllib.parse import urlparse
@@ -295,29 +296,26 @@ class ContentExtractor:
                             break
                 except AttributeError:
                     continue
-        
+
         # 別のループで削除（イテレーション中の削除を避ける）
         for element in elements_to_remove:
-            try:
+            with contextlib.suppress(Exception):
                 element.decompose()
-            except:
-                pass
 
         # 属性を最小限に削減
         for element in soup_copy.find_all(True):
             if isinstance(element, Tag):
                 # 記事識別に有用な最小限の属性のみ保持
                 attrs_to_keep: dict[str, str | list[str]] = {}
-                if element.name in ['article', 'main', 'section', 'div']:
-                    if element.get('class'):
-                        class_list = element.get('class')
-                        if isinstance(class_list, list):
-                            # 記事に関連しそうなクラスのみ保持
-                            relevant_classes = [c for c in class_list if any(
-                                keyword in c.lower() for keyword in ['content', 'article', 'main', 'body', 'text', 'post']
-                            )]
-                            if relevant_classes:
-                                attrs_to_keep['class'] = ' '.join(relevant_classes[:2])  # 最大2つまで
+                if element.name in ['article', 'main', 'section', 'div'] and element.get('class'):
+                    class_list = element.get('class')
+                    if isinstance(class_list, list):
+                        # 記事に関連しそうなクラスのみ保持
+                        relevant_classes = [c for c in class_list if any(
+                            keyword in c.lower() for keyword in ['content', 'article', 'main', 'body', 'text', 'post']
+                        )]
+                        if relevant_classes:
+                            attrs_to_keep['class'] = ' '.join(relevant_classes[:2])  # 最大2つまで
                 element.attrs = attrs_to_keep  # type: ignore[assignment]
 
         # 空の要素を削除
@@ -327,12 +325,12 @@ class ContentExtractor:
 
         # テキストのみを保持する簡略化されたHTML
         simplified = str(soup_copy)
-        
+
         # さらに簡略化：連続する空白や改行を削減
         import re
         simplified = re.sub(r'\s+', ' ', simplified)
         simplified = re.sub(r'>\s+<', '><', simplified)
-        
+
         return simplified
 
     @staticmethod
