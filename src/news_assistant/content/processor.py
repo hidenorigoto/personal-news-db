@@ -22,6 +22,8 @@ class ContentProcessor:
         """
         self.data_dir = data_dir
         os.makedirs(self.data_dir, exist_ok=True)
+        # rawディレクトリも作成
+        os.makedirs(os.path.join(self.data_dir, "raw"), exist_ok=True)
 
     def process_url(
         self,
@@ -57,6 +59,9 @@ class ContentProcessor:
             file_path = None
             if article_id is not None:
                 file_path = self._save_content(content_data, article_id)
+                # 抽出したテキストも保存
+                if extracted_text:
+                    self._save_extracted_text(extracted_text, article_id)
 
             from pydantic import HttpUrl
 
@@ -99,6 +104,24 @@ class ContentProcessor:
                 error_code="SAVE_FAILED",
                 details={"article_id": article_id, "filename": filename},
             ) from e
+
+    def _save_extracted_text(self, text: str, article_id: int) -> str:
+        """抽出したテキストをファイルに保存"""
+        try:
+            # ファイル名生成: article_{記事ID}.txt
+            filename = f"article_{article_id}.txt"
+            file_path = os.path.join(self.data_dir, "raw", filename)
+
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(text)
+
+            logger.info(f"Extracted text saved to {file_path}")
+            return file_path
+
+        except Exception as e:
+            logger.error(f"Failed to save extracted text for article {article_id}: {e}")
+            # エラーが発生してもメイン処理は継続（ログに記録のみ）
+            return ""
 
     def extract_title_only(self, url: str, fallback_title: str = "") -> str:
         """タイトルのみを抽出（軽量版）"""

@@ -13,9 +13,9 @@ router = APIRouter()
 async def create_article(article: ArticleCreate, db: Session = Depends(get_db)) -> ArticleResponse:
     """記事を新規作成"""
     try:
-        # コンテンツ処理（要約生成含む）を実行
+        # コンテンツ処理（要約生成含む）と音声生成を実行
         service = ArticleService()
-        db_article = service.create_article(db, article)
+        db_article = await service.create_article_with_audio(db, article)
         return ArticleResponse.model_validate(db_article)
     except DatabaseError as e:
         if e.error_code == "DUPLICATE_URL":

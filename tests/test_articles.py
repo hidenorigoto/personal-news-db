@@ -189,7 +189,7 @@ def test_article_audio_generation(client: TestClient) -> None:
     article_data = {"url": "https://example.com/audio-test", "title": "Audio Test Article"}
 
     with patch("news_assistant.content.processor.ContentProcessor.process_url") as mock_process, \
-         patch("news_assistant.articles.service.asyncio.create_task") as mock_task:
+         patch("news_assistant.articles.service.ArticleService._generate_article_audio") as mock_audio:
             from pydantic import HttpUrl
 
             from news_assistant.content.schemas import ProcessedContent
@@ -206,8 +206,8 @@ def test_article_audio_generation(client: TestClient) -> None:
             response = client.post("/api/articles/", json=article_data)
 
     assert response.status_code == 201
-    # 音声生成タスクが作成されたことを確認
-    mock_task.assert_called_once()
+    # 音声生成メソッドが呼ばれたことを確認
+    mock_audio.assert_called_once()
 
 
 def test_speech_service_audio_path_generation() -> None:
