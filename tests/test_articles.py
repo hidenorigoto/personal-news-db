@@ -1,5 +1,6 @@
 """記事モジュールのテスト"""
-from unittest.mock import patch
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
 
@@ -181,3 +182,118 @@ def test_pagination(client: TestClient) -> None:
     assert data["total"] == 5
     assert data["skip"] == 0
     assert data["limit"] == 3
+
+
+def test_article_audio_generation(client: TestClient) -> None:
+    """記事音声生成テスト"""
+    article_data = {"url": "https://example.com/audio-test", "title": "Audio Test Article"}
+
+    with patch("news_assistant.content.processor.ContentProcessor.process_url") as mock_process, \
+         patch("news_assistant.articles.service.asyncio.create_task") as mock_task:
+            from pydantic import HttpUrl
+
+            from news_assistant.content.schemas import ProcessedContent
+
+            mock_process.return_value = ProcessedContent(
+                url=HttpUrl("https://example.com/audio-test"),
+                title="Audio Test Article",
+                extracted_text="Test content for audio generation",
+                summary="Test summary for audio",
+                extension="html",
+                file_path=None,
+            )
+
+            response = client.post("/api/articles/", json=article_data)
+
+    assert response.status_code == 201
+    # 音声生成タスクが作成されたことを確認
+    mock_task.assert_called_once()
+
+
+def test_speech_service_audio_path_generation() -> None:
+    """音声ファイルパス生成テスト"""
+    from news_assistant.speech.schemas import OutputFormat
+    from news_assistant.speech.service import SpeechService
+
+    speech_service = SpeechService()
+
+    # 要約音声ファイルパス生成
+    summary_path = speech_service.generate_article_audio_path(
+        article_id=123, content_type="summary"
+    )
+    assert summary_path.name == "123-summary.wav"
+    assert "speech" in str(summary_path)
+
+    # 本文音声ファイルパス生成
+    full_path = speech_service.generate_article_audio_path(
+        article_id=456, content_type="full", output_format=OutputFormat.MP3
+    )
+    assert full_path.name == "456-full.mp3"
+
+
+def test_speech_service_template_functionality() -> None:
+    """音声テンプレート機能テスト"""
+    from unittest.mock import AsyncMock
+
+    from news_assistant.speech.service import SpeechService
+
+    # モックプロバイダーを使用してテスト
+    mock_provider = AsyncMock()
+    speech_service = SpeechService(provider=mock_provider)
+
+    # テンプレートヘッダー付き音声生成のテスト実行
+    import asyncio
+    async def run_test() -> None:
+        await speech_service.text_to_speech_with_template(
+            text="これはテスト内容です。",
+            article_title="テスト記事",
+            content_type="要約"
+        )
+
+    asyncio.run(run_test())
+
+    # プロバイダーが呼び出されたことを確認
+    mock_provider.synthesize_speech.assert_called_once()
+
+    # 呼び出し時の引数を確認
+    call_args = mock_provider.synthesize_speech.call_args[0][0]
+    expected_text = "テスト記事の要約をお読みします。\n\nこれはテスト内容です。"
+    assert call_args.text == expected_text
+
+
+def test_article_audio_generation_sync() -> None:
+    """記事音声生成同期メソッドテスト"""
+    from unittest.mock import AsyncMock
+
+    from news_assistant.articles.models import Article
+    from news_assistant.articles.service import ArticleService
+
+    # テスト用記事オブジェクト
+    article = Article(
+        id=999,
+        url="https://test.com",
+        title="テスト記事タイトル",
+        summary="テスト要約内容"
+    )
+
+    # モック音声サービス
+    mock_speech_service = AsyncMock()
+    mock_speech_service.generate_article_audio_path.return_value = Path("test_path.wav")
+    mock_speech_service.text_to_speech_with_template.return_value = MagicMock(success=True)
+
+    article_service = ArticleService()
+    article_service.speech_service = mock_speech_service
+
+    # テスト実行
+    import asyncio
+    async def run_test() -> dict[str, bool]:
+        results = await article_service.generate_article_audio_sync(article)
+        return results
+
+    results = asyncio.run(run_test())
+
+    # 結果確認
+    assert "summary" in results
+    assert "full" in results
+    # モック音声サービスが呼び出されたことを確認
+    mock_speech_service.text_to_speech_with_template.assert_called()
