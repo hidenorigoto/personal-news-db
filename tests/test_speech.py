@@ -1,6 +1,7 @@
 """音声変換モジュールのテスト"""
 
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -16,6 +17,7 @@ from news_assistant.speech import (
     VoiceLocale,
     VoiceNotFoundError,
 )
+from news_assistant.speech.service import OpenAISpeechProvider
 
 
 class TestVoiceConfig:
@@ -112,6 +114,126 @@ class TestSpeechService:
 
         assert response.success is True
         assert response.output_path is not None
+
+
+class TestOpenAISpeechProvider:
+    """OpenAISpeechProvider のテスト"""
+
+    @pytest.mark.asyncio
+    async def test_synthesize_speech_success(self, tmp_path: Path) -> None:
+        """OpenAI TTS音声合成成功のテスト"""
+        with patch('openai.OpenAI') as mock_openai_class:
+            # モックの設定
+            mock_client = MagicMock()
+            mock_openai_class.return_value = mock_client
+
+            # 音声レスポンスのモック
+            mock_response = MagicMock()
+            mock_response.stream_to_file = MagicMock()
+            mock_client.audio.speech.create.return_value = mock_response
+
+            # プロバイダーの作成
+            provider = OpenAISpeechProvider(api_key="test-key")
+
+            # テスト実行
+            output_path = tmp_path / "test.mp3"
+            voice_config = VoiceConfig(name="alloy", speaking_rate=1.5)
+            request = SpeechRequest(
+                text="テストメッセージ",
+                voice_config=voice_config,
+                output_format=OutputFormat.MP3,
+                output_path=output_path
+            )
+
+            # ダミーファイルを作成（stream_to_fileの動作をシミュレート）
+            output_path.write_bytes(b"OPENAI_AUDIO_DATA")
+
+            response = await provider.synthesize_speech(request)
+
+            # アサーション
+            assert response.success is True
+            assert response.output_path == output_path
+            assert response.file_size_bytes == 17  # len(b"OPENAI_AUDIO_DATA")
+
+            # API呼び出しの確認
+            mock_client.audio.speech.create.assert_called_once_with(
+                model="tts-1",
+                voice="alloy",
+                input="テストメッセージ",
+                response_format="mp3",
+                speed=1.5
+            )
+
+    @pytest.mark.asyncio
+    async def test_get_available_voices(self) -> None:
+        """OpenAI TTS利用可能音声一覧のテスト"""
+        with patch('openai.OpenAI'):
+            provider = OpenAISpeechProvider(api_key="test-key")
+            response = await provider.get_available_voices()
+
+            assert isinstance(response, VoiceListResponse)
+            assert response.total_count == 6
+            assert len(response.voices) == 6
+
+            # 音声名の確認
+            voice_names = [voice.name for voice in response.voices]
+            expected_names = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
+            assert voice_names == expected_names
+
+    @pytest.mark.asyncio
+    async def test_speed_limit_validation(self, tmp_path: Path) -> None:
+        """速度制限のバリデーションテスト"""
+        with patch('openai.OpenAI') as mock_openai_class:
+            mock_client = MagicMock()
+            mock_openai_class.return_value = mock_client
+            mock_response = MagicMock()
+            mock_response.stream_to_file = MagicMock()
+            mock_client.audio.speech.create.return_value = mock_response
+
+            provider = OpenAISpeechProvider(api_key="test-key")
+
+            # VoiceConfigの制限は2.0まで、OpenAI側で4.0に変換されることをテスト
+            voice_config = VoiceConfig(name="alloy", speaking_rate=2.0)  # VoiceConfigの最大値
+            request = SpeechRequest(
+                text="テスト",
+                voice_config=voice_config,
+                output_format=OutputFormat.MP3
+            )
+
+            await provider.synthesize_speech(request)
+
+            # 速度が2.0で呼び出されることを確認
+            mock_client.audio.speech.create.assert_called_once()
+            call_args = mock_client.audio.speech.create.call_args
+            assert call_args.kwargs['speed'] == 2.0
+
+
+class TestSpeechServiceProviderSelection:
+    """SpeechServiceのプロバイダー選択テスト"""
+
+    @patch('news_assistant.speech.service.settings')
+    def test_select_openai_provider(self, mock_settings: MagicMock) -> None:
+        """OpenAIプロバイダーが選択されることのテスト"""
+        mock_settings.speech_provider = "openai"
+        mock_settings.openai_api_key = "test-key"
+        mock_settings.openai_tts_model = "tts-1"
+        mock_settings.openai_tts_voice = "alloy"
+        mock_settings.openai_tts_speed = 1.0
+
+        with patch('news_assistant.speech.service.OpenAISpeechProvider') as mock_provider_class:
+            _ = SpeechService()
+            mock_provider_class.assert_called_once()
+
+    @patch('news_assistant.speech.service.settings')
+    def test_select_azure_provider(self, mock_settings: MagicMock) -> None:
+        """Azureプロバイダーが選択されることのテスト"""
+        mock_settings.speech_provider = "azure"
+        mock_settings.azure_speech_key = "test-key"
+        mock_settings.azure_speech_region = "japaneast"
+
+        with patch('news_assistant.speech.service.AzureSpeechProvider') as mock_provider_class:
+            _ = SpeechService()
+            mock_provider_class.assert_called_once()
 
 
 class TestExceptions:

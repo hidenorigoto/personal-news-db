@@ -37,6 +37,30 @@ class Settings(BaseSettings):
         default="japaneast", alias="AZURE_SPEECH_REGION", description="Azure Speech Serviceリージョン"
     )
 
+    # Speech Provider設定
+    speech_provider: str = Field(
+        default="azure",
+        alias="SPEECH_PROVIDER",
+        description="使用する音声プロバイダー (azure, openai)"
+    )
+
+    # OpenAI TTS設定
+    openai_tts_model: str = Field(
+        default="tts-1",
+        alias="OPENAI_TTS_MODEL",
+        description="OpenAI TTSモデル (tts-1, tts-1-hd)"
+    )
+    openai_tts_voice: str = Field(
+        default="alloy",
+        alias="OPENAI_TTS_VOICE",
+        description="OpenAI TTS音声 (alloy, echo, fable, onyx, nova, shimmer)"
+    )
+    openai_tts_speed: float = Field(
+        default=1.0,
+        alias="OPENAI_TTS_SPEED",
+        description="OpenAI TTS速度 (0.25-4.0)"
+    )
+
     # ファイル保存設定
     data_dir: str = Field(default="data", description="データファイル保存ディレクトリ")
 
