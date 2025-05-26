@@ -307,3 +307,37 @@ class SpeechService:
         )
 
         return await self.text_to_speech(request)
+
+    async def text_to_speech_with_template(
+        self,
+        text: str,
+        article_title: str,
+        content_type: str = "要約",
+        voice_name: str = "ja-JP-NanamiNeural",
+        output_format: OutputFormat = OutputFormat.WAV,
+        output_path: Path | None = None,
+    ) -> SpeechResponse:
+        """テンプレートヘッダー付きテキスト音声変換"""
+        # テンプレートヘッダーを作成
+        header = f"{article_title}の{content_type}をお読みします。"
+        full_text = f"{header}\n\n{text}"
+
+        return await self.text_to_speech_simple(
+            text=full_text,
+            voice_name=voice_name,
+            output_format=output_format,
+            output_path=output_path,
+        )
+
+    def generate_article_audio_path(
+        self,
+        article_id: int,
+        content_type: str,
+        output_format: OutputFormat = OutputFormat.WAV
+    ) -> Path:
+        """記事用音声ファイルパスを生成"""
+        output_dir = Path(settings.data_dir) / "speech"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        filename = f"{article_id}-{content_type}.{output_format.value}"
+        return output_dir / filename
