@@ -1,10 +1,11 @@
 """コンテンツ処理モジュールのテスト"""
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from pydantic import HttpUrl
 
 from news_assistant.content import ContentExtractor, ContentProcessor
+from news_assistant.content.extractor import ArticleContent
 from news_assistant.content.schemas import ContentData, TextExtractionResult, TitleExtractionResult
 from news_assistant.core import ContentProcessingError
 
@@ -202,3 +203,119 @@ class TestContentProcessor:
         result = processor.generate_summary_from_text("")
 
         assert result == ""
+
+    @patch("news_assistant.content.extractor.ContentExtractor._extract_text_from_html_with_ai")
+    @patch("news_assistant.content.extractor.ContentExtractor._extract_text_from_html_traditional")
+    def test_html_text_extraction_with_ai(self, mock_traditional: MagicMock, mock_ai: MagicMock) -> None:
+        """AI抽出とフォールバックのテスト"""
+        html_content = b"""
+        <html>
+            <nav>Navigation Menu</nav>
+            <article>
+                <h1>Article Title</h1>
+                <p>This is the main content.</p>
+            </article>
+            <footer>Copyright 2024</footer>
+        </html>
+        """
+
+        # AI抽出成功のケース
+        mock_ai.return_value = TextExtractionResult(
+            text="Article Title\n\nThis is the main content.",
+            success=True,
+            word_count=40
+        )
+
+        result = ContentExtractor._extract_text_from_html(html_content)
+
+        assert result.success is True
+        assert "Navigation Menu" not in result.text
+        assert "Copyright 2024" not in result.text
+        assert "This is the main content." in result.text
+        mock_ai.assert_called_once()
+        mock_traditional.assert_not_called()
+
+    @patch("news_assistant.content.extractor.ContentExtractor._extract_text_from_html_with_ai")
+    @patch("news_assistant.content.extractor.ContentExtractor._extract_text_from_html_traditional")
+    def test_html_text_extraction_fallback(self, mock_traditional: MagicMock, mock_ai: MagicMock) -> None:
+        """AI抽出失敗時のフォールバックテスト"""
+        html_content = b"<html><body>Test content</body></html>"
+
+        # AI抽出失敗
+        mock_ai.return_value = TextExtractionResult(
+            text="",
+            success=False,
+            word_count=0
+        )
+
+        # 従来の方法で成功
+        mock_traditional.return_value = TextExtractionResult(
+            text="Test content",
+            success=True,
+            word_count=12
+        )
+
+        result = ContentExtractor._extract_text_from_html(html_content)
+
+        assert result.success is True
+        assert result.text == "Test content"
+        mock_ai.assert_called_once()
+        mock_traditional.assert_called_once()
+
+    @patch("news_assistant.content.extractor.settings")
+    def test_html_text_extraction_without_api_key(self, mock_settings: MagicMock) -> None:
+        """APIキーが設定されていない場合のテスト"""
+        mock_settings.openai_api_key = None
+
+        html_content = b"<html><body>Test content</body></html>"
+
+        # AI抽出は実行されず、従来の方法が使われる
+        result = ContentExtractor._extract_text_from_html(html_content)
+
+        assert result.success is True
+        assert result.text.strip() == "Test content"
+
+    @patch("openai.OpenAI")
+    @patch("news_assistant.content.extractor.settings")
+    def test_ai_extraction_with_structured_output(self, mock_settings: MagicMock, mock_openai: MagicMock) -> None:
+        """構造化出力を使用したAI抽出のテスト"""
+        mock_settings.openai_api_key = "test-key"
+
+        html_content = b"""
+        <html>
+            <nav class="navigation">Home About Contact</nav>
+            <article class="main-article">
+                <h1>Test Article</h1>
+                <p>This is the article content.</p>
+            </article>
+            <aside class="sidebar">Related Posts</aside>
+        </html>
+        """
+
+        # モックレスポンスの設定
+        mock_article = ArticleContent(
+            title="Test Article",
+            main_text="This is the article content.",
+            is_article=True,
+            confidence=0.95
+        )
+
+        mock_message = Mock()
+        mock_message.parsed = mock_article
+
+        mock_choice = Mock()
+        mock_choice.message = mock_message
+
+        mock_completion = Mock()
+        mock_completion.choices = [mock_choice]
+
+        mock_client = mock_openai.return_value
+        mock_client.beta.chat.completions.parse.return_value = mock_completion
+
+        result = ContentExtractor._extract_text_from_html_with_ai(html_content)
+
+        assert result.success is True
+        assert "Test Article" in result.text
+        assert "This is the article content." in result.text
+        assert "Home About Contact" not in result.text
+        assert "Related Posts" not in result.text
