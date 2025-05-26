@@ -1,12 +1,19 @@
 """記事関連のビジネスロジック"""
 
+import asyncio
+import logging
+from pathlib import Path
+
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..content import ContentProcessor
 from ..core import ArticleNotFoundError, ContentProcessingError, DatabaseError
+from ..speech import SpeechService
 from .models import Article
 from .schemas import ArticleCreate, ArticleUpdate
+
+logger = logging.getLogger(__name__)
 
 
 class ArticleService:
@@ -18,6 +25,7 @@ class ArticleService:
             data_dir: ファイル保存ディレクトリ
         """
         self.content_processor = ContentProcessor(data_dir)
+        self.speech_service = SpeechService()
 
     def create_article(self, db: Session, article_data: ArticleCreate) -> Article:
         """記事を作成"""
@@ -44,6 +52,9 @@ class ArticleService:
                 db_article.summary = str(processed_content.summary)  # type: ignore[assignment]
                 db.commit()
                 db.refresh(db_article)
+
+                # 音声データを生成
+                asyncio.create_task(self._generate_article_audio(db_article))
 
             except ContentProcessingError as e:
                 # コンテンツ処理に失敗した場合は元のデータで保存
@@ -124,3 +135,83 @@ class ArticleService:
                 error_code="DELETE_FAILED",
                 details={"article_id": article_id},
             ) from e
+
+    async def _generate_article_audio(self, article: Article) -> None:
+        """記事の音声データを生成（バックグラウンド処理）"""
+        try:
+            # 要約音声を生成
+            if article.summary:
+                summary_path = self.speech_service.generate_article_audio_path(
+                    article_id=int(article.id), content_type="summary"
+                )
+                summary_response = await self.speech_service.text_to_speech_with_template(
+                    text=str(article.summary),
+                    article_title=str(article.title),
+                    content_type="要約",
+                    output_path=summary_path,
+                )
+
+                if summary_response.success:
+                    logger.info(f"要約音声生成完了: 記事ID {article.id}")
+                else:
+                    logger.error(f"要約音声生成失敗: 記事ID {article.id}, エラー: {summary_response.error_message}")
+
+            # 本文音声を生成（コンテンツファイルが存在する場合）
+            content_path = Path(self.content_processor.data_dir) / "raw" / f"article_{article.id}.txt"
+            if content_path.exists():
+                content_text = content_path.read_text(encoding='utf-8')
+                full_audio_path = self.speech_service.generate_article_audio_path(
+                    article_id=int(article.id), content_type="full"
+                )
+                full_response = await self.speech_service.text_to_speech_with_template(
+                    text=content_text,
+                    article_title=str(article.title),
+                    content_type="本文",
+                    output_path=full_audio_path,
+                )
+
+                if full_response.success:
+                    logger.info(f"本文音声生成完了: 記事ID {article.id}")
+                else:
+                    logger.error(f"本文音声生成失敗: 記事ID {article.id}, エラー: {full_response.error_message}")
+
+        except Exception as e:
+            logger.error(f"音声生成中にエラーが発生: 記事ID {article.id}, エラー: {e}")
+
+    async def generate_article_audio_sync(self, article: Article) -> dict[str, bool]:
+        """記事の音声データを同期的に生成"""
+        results = {"summary": False, "full": False}
+
+        try:
+            # 要約音声を生成
+            if article.summary:
+                summary_path = self.speech_service.generate_article_audio_path(
+                    article_id=int(article.id), content_type="summary"
+                )
+                summary_response = await self.speech_service.text_to_speech_with_template(
+                    text=str(article.summary),
+                    article_title=str(article.title),
+                    content_type="要約",
+                    output_path=summary_path,
+                )
+                results["summary"] = summary_response.success
+
+            # 本文音声を生成
+            content_path = Path(self.content_processor.data_dir) / "raw" / f"article_{article.id}.txt"
+            if content_path.exists():
+                content_text = content_path.read_text(encoding='utf-8')
+                full_audio_path = self.speech_service.generate_article_audio_path(
+                    article_id=int(article.id), content_type="full"
+                )
+                full_response = await self.speech_service.text_to_speech_with_template(
+                    text=content_text,
+                    article_title=str(article.title),
+                    content_type="本文",
+                    output_path=full_audio_path,
+                )
+                results["full"] = full_response.success
+
+        except Exception as e:
+            logger.error(f"音声生成中にエラーが発生: 記事ID {article.id}, エラー: {e}")
+
+        return results
