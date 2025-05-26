@@ -6,7 +6,7 @@
 
 - **記事の自動処理**: URLから記事のタイトル・内容を自動抽出
 - **AI要約自動生成**: OpenAI APIを使用した高品質な要約生成
-- **音声変換機能**: Azure Text-to-Speech APIによるテキスト音声変換
+- **音声変換機能**: Azure/OpenAI Text-to-Speech APIによるテキスト音声変換
 - **多様なコンテンツ対応**: HTML、PDF、テキストファイルの処理
 - **RESTful API**: 記事の登録・取得・更新・削除
 - **ヘルスチェック機能**: システム状態の監視
@@ -46,12 +46,20 @@
 `.env`ファイルを作成して以下を設定：
 
 ```bash
-# OpenAI API設定（要約機能用）
+# OpenAI API設定（要約・音声機能用）
 OPENAI_API_KEY=your_openai_api_key_here
 
-# Azure Speech Service設定（音声変換機能用）
+# 音声プロバイダー設定
+SPEECH_PROVIDER=azure  # "azure" または "openai"
+
+# Azure Speech Service設定（SPEECH_PROVIDER=azureの場合）
 AZURE_SPEECH_KEY=your_azure_speech_key_here
 AZURE_SPEECH_REGION=your_azure_region_here
+
+# OpenAI TTS設定（SPEECH_PROVIDER=openaiの場合）
+OPENAI_TTS_MODEL=tts-1  # "tts-1" または "tts-1-hd"
+OPENAI_TTS_VOICE=alloy  # alloy, echo, fable, onyx, nova, shimmer
+OPENAI_TTS_SPEED=1.0    # 0.25-4.0
 
 # データベース設定
 NEWS_ASSISTANT_DB_URL=sqlite:///./data/news.db
@@ -211,10 +219,13 @@ news-assistant/
 - **schemas.py**: コンテンツデータスキーマ
 
 #### 4. **speech/** - 音声変換機能
-- **service.py**: Azure Text-to-Speech API統合・音声合成サービス
+- **service.py**: Text-to-Speech API統合・音声合成サービス
 - **schemas.py**: 音声設定・リクエスト・レスポンススキーマ
 - **exceptions.py**: 音声変換専用例外クラス
-- **プロバイダー**: Azure Speech Service、Mock（テスト用）
+- **プロバイダー**: 
+  - Azure Speech Service（日本語最適化、SSML対応）
+  - OpenAI TTS（6種類の音声、高品質モデル）
+  - Mock（テスト用）
 
 #### 5. **core/** - 共通基盤
 - **config.py**: 環境変数・アプリケーション設定
@@ -239,6 +250,36 @@ curl -X POST "http://localhost:8000/api/articles/" \
     "title": "記事タイトル"
   }'
 ```
+
+### 音声プロバイダーの選択
+
+本システムは2つの音声プロバイダーをサポートしています：
+
+#### Azure Speech Service
+- **特徴**: 日本語に最適化、SSML対応、詳細な音声調整可能
+- **設定方法**:
+  ```bash
+  SPEECH_PROVIDER=azure
+  AZURE_SPEECH_KEY=your_key
+  AZURE_SPEECH_REGION=japaneast
+  ```
+
+#### OpenAI TTS
+- **特徴**: シンプルなAPI、6種類の音声、高品質モデル（tts-1-hd）
+- **音声オプション**:
+  - `alloy`: 自然でスムーズ
+  - `echo`: 明瞭で正確
+  - `fable`: 温かみのある声
+  - `onyx`: 深く権威的
+  - `nova`: 明るくエネルギッシュ
+  - `shimmer`: 柔らかく優しい
+- **設定方法**:
+  ```bash
+  SPEECH_PROVIDER=openai
+  OPENAI_TTS_MODEL=tts-1-hd  # または tts-1
+  OPENAI_TTS_VOICE=nova
+  OPENAI_TTS_SPEED=1.2       # 0.25-4.0
+  ```
 
 ## 設計ドキュメント
 

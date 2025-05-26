@@ -18,6 +18,10 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - AZURE_SPEECH_KEY=${AZURE_SPEECH_KEY}
       - AZURE_SPEECH_REGION=${AZURE_SPEECH_REGION:-japaneast}
+      - SPEECH_PROVIDER=${SPEECH_PROVIDER:-azure}
+      - OPENAI_TTS_MODEL=${OPENAI_TTS_MODEL:-tts-1}
+      - OPENAI_TTS_VOICE=${OPENAI_TTS_VOICE:-alloy}
+      - OPENAI_TTS_SPEED=${OPENAI_TTS_SPEED:-1.0}
       - ENVIRONMENT=development
     restart: unless-stopped
 
@@ -39,6 +43,10 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - AZURE_SPEECH_KEY=${AZURE_SPEECH_KEY}
       - AZURE_SPEECH_REGION=${AZURE_SPEECH_REGION:-japaneast}
+      - SPEECH_PROVIDER=${SPEECH_PROVIDER:-azure}
+      - OPENAI_TTS_MODEL=${OPENAI_TTS_MODEL:-tts-1}
+      - OPENAI_TTS_VOICE=${OPENAI_TTS_VOICE:-alloy}
+      - OPENAI_TTS_SPEED=${OPENAI_TTS_SPEED:-1.0}
       - ENVIRONMENT=testing
 
   # Poetry管理用
@@ -61,6 +69,10 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - AZURE_SPEECH_KEY=${AZURE_SPEECH_KEY}
       - AZURE_SPEECH_REGION=${AZURE_SPEECH_REGION:-japaneast}
+      - SPEECH_PROVIDER=${SPEECH_PROVIDER:-azure}
+      - OPENAI_TTS_MODEL=${OPENAI_TTS_MODEL:-tts-1}
+      - OPENAI_TTS_VOICE=${OPENAI_TTS_VOICE:-alloy}
+      - OPENAI_TTS_SPEED=${OPENAI_TTS_SPEED:-1.0}
       - ENVIRONMENT=development
 
 volumes:
