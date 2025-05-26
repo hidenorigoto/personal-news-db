@@ -424,10 +424,12 @@ class SpeechService:
     def __init__(self, provider: SpeechProvider | None = None) -> None:
         if provider is None:
             # 設定に基づいてプロバイダーを選択
+            logger.info(f"音声プロバイダー設定: SPEECH_PROVIDER={settings.speech_provider}")
             if settings.speech_provider == "openai":
                 if settings.openai_api_key:
                     provider = OpenAISpeechProvider()
                     logger.info("OpenAI TTS プロバイダーを使用します。")
+                    logger.info(f"OpenAI TTS設定: model={settings.openai_tts_model}, voice={settings.openai_tts_voice}, speed={settings.openai_tts_speed}")
                 else:
                     logger.warning("OpenAI APIキーが設定されていません。モックプロバイダーを使用します。")
                     provider = MockSpeechProvider()
