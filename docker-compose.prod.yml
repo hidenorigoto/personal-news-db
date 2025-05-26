@@ -13,6 +13,8 @@ services:
       - NEWS_ASSISTANT_DB_URL=sqlite:///./data/news.db
       - PYTHONPATH=/app
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - AZURE_SPEECH_KEY=${AZURE_SPEECH_KEY}
+      - AZURE_SPEECH_REGION=${AZURE_SPEECH_REGION:-japaneast}
       - ENVIRONMENT=production
     restart: unless-stopped
     healthcheck:
@@ -34,6 +36,9 @@ services:
     environment:
       - NEWS_ASSISTANT_DB_URL=sqlite:///./data/news.db
       - PYTHONPATH=/app
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - AZURE_SPEECH_KEY=${AZURE_SPEECH_KEY}
+      - AZURE_SPEECH_REGION=${AZURE_SPEECH_REGION:-japaneast}
       - ENVIRONMENT=production
     command: python scripts/init_with_alembic.py
     profiles:

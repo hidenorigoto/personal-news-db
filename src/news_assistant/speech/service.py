@@ -75,11 +75,11 @@ class AzureSpeechProvider:
     def _get_audio_format(self, output_format: OutputFormat) -> speechsdk.SpeechSynthesisOutputFormat:
         """出力フォーマットをAzure Speech SDKの形式に変換"""
         format_mapping = {
-            OutputFormat.WAV: speechsdk.SpeechSynthesisOutputFormat.Wav16Khz16BitMonoPcm,
+            OutputFormat.WAV: speechsdk.SpeechSynthesisOutputFormat.Riff16Khz16BitMonoPcm,
             OutputFormat.MP3: speechsdk.SpeechSynthesisOutputFormat.Audio16Khz32KBitRateMonoMp3,
             OutputFormat.OGG: speechsdk.SpeechSynthesisOutputFormat.Ogg16Khz16BitMonoOpus,
         }
-        return format_mapping.get(output_format, speechsdk.SpeechSynthesisOutputFormat.Wav16Khz16BitMonoPcm)
+        return format_mapping.get(output_format, speechsdk.SpeechSynthesisOutputFormat.Riff16Khz16BitMonoPcm)
 
     def _generate_output_path(self, output_format: OutputFormat) -> Path:
         """出力ファイルパスを自動生成"""

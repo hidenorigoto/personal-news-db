@@ -16,6 +16,8 @@ services:
       - NEWS_ASSISTANT_DB_URL=sqlite:///./data/news.db
       - PYTHONPATH=/app
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - AZURE_SPEECH_KEY=${AZURE_SPEECH_KEY}
+      - AZURE_SPEECH_REGION=${AZURE_SPEECH_REGION:-japaneast}
       - ENVIRONMENT=development
     restart: unless-stopped
 
@@ -34,6 +36,9 @@ services:
     environment:
       - NEWS_ASSISTANT_DB_URL=sqlite:///./data/news.db
       - PYTHONPATH=/app
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - AZURE_SPEECH_KEY=${AZURE_SPEECH_KEY}
+      - AZURE_SPEECH_REGION=${AZURE_SPEECH_REGION:-japaneast}
       - ENVIRONMENT=testing
 
   # Poetry管理用
@@ -53,6 +58,9 @@ services:
       - ./alembic.ini:/app/alembic.ini
     environment:
       - NEWS_ASSISTANT_DB_URL=sqlite:///./data/news.db
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - AZURE_SPEECH_KEY=${AZURE_SPEECH_KEY}
+      - AZURE_SPEECH_REGION=${AZURE_SPEECH_REGION:-japaneast}
       - ENVIRONMENT=development
 
 volumes:
