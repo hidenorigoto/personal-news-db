@@ -284,12 +284,12 @@ class ContentExtractor:
             if isinstance(element, Tag):
                 # クラスやIDに特定のパターンが含まれる場合は削除対象に追加
                 try:
-                    class_list = element.get('class', [])
+                    class_list = element.get('class')
                     if isinstance(class_list, list):
                         class_str = ' '.join(class_list)
                     else:
                         class_str = str(class_list) if class_list else ''
-                    id_str = str(element.get('id', '') or '')
+                    id_str = str(element.get('id') or '')
                     for pattern in nav_patterns:
                         if pattern in class_str.lower() or pattern in id_str.lower():
                             elements_to_remove.append(element)
