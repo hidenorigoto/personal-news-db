@@ -1,6 +1,5 @@
 """記事関連のビジネスロジック"""
 
-import asyncio
 import logging
 from pathlib import Path
 
@@ -26,6 +25,20 @@ class ArticleService:
         """
         self.content_processor = ContentProcessor(data_dir)
         self.speech_service = SpeechService()
+
+    async def create_article_with_audio(self, db: Session, article_data: ArticleCreate) -> Article:
+        """記事を作成し、音声も生成"""
+        # まず記事を作成
+        article = self.create_article(db, article_data)
+
+        # 音声データを生成
+        try:
+            await self._generate_article_audio(article)
+        except Exception as e:
+            logger.error(f"Failed to generate audio for article {article.id}: {e}")
+            # 音声生成に失敗しても記事作成は成功とする
+
+        return article
 
     def create_article(self, db: Session, article_data: ArticleCreate) -> Article:
         """記事を作成"""
@@ -53,8 +66,9 @@ class ArticleService:
                 db.commit()
                 db.refresh(db_article)
 
-                # 音声データを生成
-                asyncio.create_task(self._generate_article_audio(db_article))
+                # 音声データを生成（バックグラウンドで実行）
+                # 注: 音声生成は別途バックグラウンドタスクとして実行する必要がある
+                logger.info(f"Article {db_article.id} created, audio generation will be performed separately")
 
             except ContentProcessingError as e:
                 # コンテンツ処理に失敗した場合は元のデータで保存
@@ -160,6 +174,12 @@ class ArticleService:
             content_path = Path(self.content_processor.data_dir) / "raw" / f"article_{article.id}.txt"
             if content_path.exists():
                 content_text = content_path.read_text(encoding='utf-8')
+
+                # テキストが長すぎる場合は最初の9000文字に制限（テンプレートヘッダー分の余裕を残す）
+                if len(content_text) > 9000:
+                    content_text = content_text[:9000] + "...（以下省略）"
+                    logger.warning(f"本文が長すぎるため、最初の9000文字のみ音声化します: 記事ID {article.id}")
+
                 full_audio_path = self.speech_service.generate_article_audio_path(
                     article_id=int(article.id), content_type="full"
                 )
@@ -200,6 +220,12 @@ class ArticleService:
             content_path = Path(self.content_processor.data_dir) / "raw" / f"article_{article.id}.txt"
             if content_path.exists():
                 content_text = content_path.read_text(encoding='utf-8')
+
+                # テキストが長すぎる場合は最初の9000文字に制限（テンプレートヘッダー分の余裕を残す）
+                if len(content_text) > 9000:
+                    content_text = content_text[:9000] + "...（以下省略）"
+                    logger.warning(f"本文が長すぎるため、最初の9000文字のみ音声化します: 記事ID {article.id}")
+
                 full_audio_path = self.speech_service.generate_article_audio_path(
                     article_id=int(article.id), content_type="full"
                 )
