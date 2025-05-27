@@ -157,7 +157,7 @@ class TestOpenAISpeechProvider:
 
             # API呼び出しの確認
             mock_client.audio.speech.create.assert_called_once_with(
-                model="tts-1",
+                model=provider.model,  # 実際のプロバイダーの設定を使用
                 voice="alloy",
                 input="テストメッセージ",
                 response_format="mp3",

@@ -6,6 +6,7 @@ from datetime import datetime
 from ..ai.exceptions import SummaryGenerationError
 from ..ai.summarizer import generate_summary
 from ..core import ContentProcessingError
+from .audio_preprocessor import AudioTextPreprocessor
 from .extractor import ContentExtractor
 from .schemas import ContentData, ProcessedContent
 
@@ -116,10 +117,35 @@ class ContentProcessor:
                 f.write(text)
 
             logger.info(f"Extracted text saved to {file_path}")
+
+            # 音声用の前処理済みテキストも保存
+            self._save_audio_preprocessed_text(text, article_id)
+
             return file_path
 
         except Exception as e:
             logger.error(f"Failed to save extracted text for article {article_id}: {e}")
+            # エラーが発生してもメイン処理は継続（ログに記録のみ）
+            return ""
+
+    def _save_audio_preprocessed_text(self, text: str, article_id: int) -> str:
+        """音声読み上げ用に前処理したテキストを保存"""
+        try:
+            # 音声用テキストの前処理
+            preprocessed_text = AudioTextPreprocessor.preprocess_for_audio(text)
+
+            # ファイル名生成: article_{記事ID}_audio.txt
+            filename = f"article_{article_id}_audio.txt"
+            file_path = os.path.join(self.data_dir, "raw", filename)
+
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(preprocessed_text)
+
+            logger.info(f"Audio preprocessed text saved to {file_path}")
+            return file_path
+
+        except Exception as e:
+            logger.error(f"Failed to save audio preprocessed text for article {article_id}: {e}")
             # エラーが発生してもメイン処理は継続（ログに記録のみ）
             return ""
 

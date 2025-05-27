@@ -170,11 +170,20 @@ class ArticleService:
                 else:
                     logger.error(f"要約音声生成失敗: 記事ID {article.id}, エラー: {summary_response.error_message}")
 
-            # 本文音声を生成（コンテンツファイルが存在する場合）
-            content_path = Path(self.content_processor.data_dir) / "raw" / f"article_{article.id}.txt"
-            if content_path.exists():
-                content_text = content_path.read_text(encoding='utf-8')
+            # 本文音声を生成（音声用前処理済みファイルを優先）
+            audio_content_path = Path(self.content_processor.data_dir) / "raw" / f"article_{article.id}_audio.txt"
+            raw_content_path = Path(self.content_processor.data_dir) / "raw" / f"article_{article.id}.txt"
 
+            content_text = None
+            # 音声用前処理済みファイルが存在すればそれを使用、なければ生のテキストを使用
+            if audio_content_path.exists():
+                content_text = audio_content_path.read_text(encoding='utf-8')
+                logger.info(f"音声用前処理済みテキストを使用: 記事ID {article.id}")
+            elif raw_content_path.exists():
+                content_text = raw_content_path.read_text(encoding='utf-8')
+                logger.info(f"生のテキストを使用: 記事ID {article.id}")
+
+            if content_text:
                 # テキストが長すぎる場合は最初の9000文字に制限（テンプレートヘッダー分の余裕を残す）
                 if len(content_text) > 9000:
                     content_text = content_text[:9000] + "...（以下省略）"
@@ -216,10 +225,19 @@ class ArticleService:
                 )
                 results["summary"] = summary_response.success
 
-            # 本文音声を生成
-            content_path = Path(self.content_processor.data_dir) / "raw" / f"article_{article.id}.txt"
-            if content_path.exists():
-                content_text = content_path.read_text(encoding='utf-8')
+            # 本文音声を生成（音声用前処理済みファイルを優先）
+            audio_content_path = Path(self.content_processor.data_dir) / "raw" / f"article_{article.id}_audio.txt"
+            raw_content_path = Path(self.content_processor.data_dir) / "raw" / f"article_{article.id}.txt"
+
+            content_text = None
+            if audio_content_path.exists():
+                content_text = audio_content_path.read_text(encoding='utf-8')
+                logger.info(f"音声用前処理済みテキストを使用（同期）: 記事ID {article.id}")
+            elif raw_content_path.exists():
+                content_text = raw_content_path.read_text(encoding='utf-8')
+                logger.info(f"生のテキストを使用（同期）: 記事ID {article.id}")
+
+            if content_text:
 
                 # テキストが長すぎる場合は最初の9000文字に制限（テンプレートヘッダー分の余裕を残す）
                 if len(content_text) > 9000:

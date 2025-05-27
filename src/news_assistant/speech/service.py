@@ -96,6 +96,8 @@ class AzureSpeechProvider:
 
     def _create_ssml(self, request: SpeechRequest) -> str:
         """SSMLを生成"""
+        import html
+
         voice_config = request.voice_config
 
         # 話速の設定
@@ -113,11 +115,14 @@ class AzureSpeechProvider:
         # 音量の設定
         volume = f"{int(voice_config.volume * 100)}"
 
+        # テキストをXML用にエスケープ
+        escaped_text = html.escape(request.text)
+
         ssml = f"""
         <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="{voice_config.locale.value}">
             <voice name="{voice_config.name}">
                 <prosody rate="{rate}" pitch="{pitch}" volume="{volume}">
-                    {request.text}
+                    {escaped_text}
                 </prosody>
             </voice>
         </speak>
